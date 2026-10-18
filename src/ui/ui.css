@@ -17,6 +17,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #fde7ef; fon
 #game canvas:active { cursor: grabbing; }
 #ui { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 #ui > * { pointer-events: auto; }
+/* full-screen effect layers must never block clicks or camera dragging */
+#ui > .fade, #ui > .chapter-card, #ui > .hud { pointer-events: none; }
+#ui > .hud > * { pointer-events: auto; }
+#ui > .hud > .toasts, #ui > .hud > .pinky-bubble, #ui > .hud > .compass, #ui > .hud > .prompt { pointer-events: none; }
 .hidden { display: none !important; }
 button { font-family: var(--round); cursor: pointer; }
 
@@ -55,8 +59,8 @@ button { font-family: var(--round); cursor: pointer; }
 .pill { background: rgba(255, 255, 255, .85); border-radius: 999px; padding: 8px 16px; box-shadow: var(--shadow); font-weight: 700; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .hearts { display: flex; gap: 4px; }
 .heart { width: 26px; height: 24px; position: relative; transition: transform .3s; }
-.heart::before { content: "♥"; position: absolute; inset: -6px 0 0 0; font-size: 30px; line-height: 30px; color: #e3d7e8; text-align: center; }
-.heart.on::before { color: #ff5f8f; text-shadow: 0 0 10px rgba(255, 95, 143, .7); }
+.heart::before { content: "♥"; position: absolute; inset: -6px 0 0 0; font-size: 30px; line-height: 30px; color: transparent; -webkit-text-stroke: 2px #ff8fb8; text-align: center; }
+.heart.on::before { -webkit-text-stroke: 0; color: #ff5f8f; text-shadow: 0 0 10px rgba(255, 95, 143, .7); }
 .heart.pop { animation: heartPop .7s; }
 @keyframes heartPop { 40% { transform: scale(1.7) rotate(-10deg); } }
 .counter { font-size: 18px; }
@@ -145,3 +149,22 @@ button { font-family: var(--round); cursor: pointer; }
 .mode-card h3 { font-family: var(--kid); font-size: 28px; margin: 0 0 4px; color: var(--pink-deep); }
 .mode-card p { margin: 0 0 6px; color: #7a5a8a; font-size: 15px; min-height: 38px; }
 .mode-card .big-btn { min-width: 0; width: 100%; font-size: 19px; }
+
+/* ---------- Compass rose ---------- */
+.compass { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 104px; height: 104px; border-radius: 50%; box-shadow: var(--shadow); }
+.compass .rose { width: 100%; height: 100%; display: block; }
+.compass .rim { fill: rgba(255,250,242,.92); stroke: #e8c9da; stroke-width: 3; }
+.compass .inner { fill: none; stroke: #f3dbe8; stroke-width: 1.5; }
+.compass .tick { stroke: #c9a8c0; stroke-width: 1.5; stroke-linecap: round; }
+.compass .pt { fill: #b9a6d8; } .compass .pt2 { fill: #8f7ac0; }
+.compass .pt-n { fill: #ff6f9c; } .compass .pt-n2 { fill: #e0306a; }
+.compass .pt-s { fill: #d9cbe8; }
+.compass .lbl { font: 800 13px var(--round); fill: #4a2d4a; text-anchor: middle; dominant-baseline: central; }
+.compass .lbl.n { fill: #e0306a; }
+.compass .hub { fill: #fff; stroke: #8f7ac0; stroke-width: 1.5; }
+.compass .facing { fill: #ff8fb8; }
+.compass .csky { position: absolute; transform: translate(-50%, -50%); font-size: 15px; filter: drop-shadow(0 0 4px rgba(255,200,80,.9)); transition: opacity .3s; }
+.icon-btn.flashlight.on { background: linear-gradient(180deg, #fff6c4, #ffd34d); box-shadow: 0 0 16px rgba(255,210,80,.8), var(--shadow); }
+
+.hud-top-right .clock { display: none; }
+@media (max-width: 1100px) { .compass { left: 40%; } }

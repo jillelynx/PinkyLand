@@ -33,7 +33,7 @@ export class Game {
     style.textContent = css;
     document.head.appendChild(style);
     this.params = new URLSearchParams(location.search);
-    this.settings = { music: 0.55, sfx: 0.8, ambience: 0.7, quality: 'high', sensitivity: 0.0045, hideControls: false };
+    this.settings = { music: 0.55, sfx: 0.8, ambience: 0.7, quality: 'high', sensitivity: 0.006, hideControls: false, mouseLook: false };
     this.state = freshState();
     this.load();
     if (this.params.get('quality')) this.settings.quality = this.params.get('quality');
@@ -42,6 +42,7 @@ export class Game {
     this.engine = new Engine(this.container, this.settings.quality);
     this.canvas = this.engine.renderer.domElement;
     this.input = new Input(this.canvas);
+    this.input.mouseLook = !!this.settings.mouseLook;
     this.audio = new AudioEngine();
     for (const k of ['music', 'sfx', 'ambience']) this.audio.volumes[k] = this.settings[k];
     this.ui = new UI(document.getElementById('ui'), this);
@@ -311,6 +312,7 @@ export class Game {
       return this.ui.openCharacters(L.availableAvatars().filter((k) => k !== 'liev' || lievJoined), this.state.avatar, ALL_AVATARS);
     }
     if (act === 'settings') return this.ui.openSettings(this.settings);
+    if (act === 'flashlight') return this.toggleFlashlight();
   }
 
   showHint() {
@@ -320,6 +322,20 @@ export class Game {
     if (!h) { this.ui.say('Let’s just explore and have fun!', 4); return; }
     this.ui.say(h.text, 7);
     if (h.target) L.showTrail(h.target);
+  }
+
+  toggleFlashlight() {
+    const f = this.level?.flashlight;
+    const on = f ? !f.on : true;
+    this.flashlightMode = on ? 'on' : 'off';
+    this.ui.toast('🔦', on ? 'Flashlight on' : 'Flashlight off');
+  }
+
+  setMouseLook(on) {
+    this.settings.mouseLook = on;
+    this.input.mouseLook = on;
+    if (!on && document.pointerLockElement) document.exitPointerLock?.();
+    this.saveGame();
   }
 
   setVolume(kind, v) { this.settings[kind] = v; this.audio.setVolume(kind, v); this.saveGame(); }
@@ -333,6 +349,7 @@ export class Game {
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.settings) Object.assign(this.settings, data.settings);
+      if (this.settings.sensitivity <= 0.0045) this.settings.sensitivity = 0.006; // faster default turning
       if (data.state && data.state.version === 1) { this.state = Object.assign(freshState(), data.state); this.savedRaw = raw; }
     } catch (e) { /* storage unavailable — play without saving */ }
   }
@@ -364,6 +381,7 @@ export class Game {
     if (busy) return;
     const hit = (...c) => c.some((k) => inp.pressed.has(k));
     if (hit('KeyH', 'Pad_hint')) { if (!this.ui.open) this.uiAction('hint'); }
+    if (hit('KeyF') && !this.ui.open) this.toggleFlashlight();
     if (hit('KeyJ', 'Pad_journal')) this.uiAction('journal');
     if (hit('KeyM', 'Pad_map')) this.uiAction('map');
     if (this.ui.open) return;

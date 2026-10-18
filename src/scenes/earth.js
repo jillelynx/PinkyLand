@@ -13,7 +13,8 @@ import { KIDS } from '../characters/style.js';
 import { NPC, Follower } from '../characters/npc.js';
 import { makeNoise2D, makeRandom, smoothstep } from '../util/noise.js';
 
-const ROAD_Z = -16;
+const ROAD_Z = -44; // the street runs BEHIND the houses, so Jacinta never has to cross it
+const WALK_Z = -20.4; // the sidewalk in front of the houses, along the park
 const PINKY = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
 const J = { who: 'Jacinta', color: '#ff6fa8', pitch: 1.2 };
 const L = { who: 'Liev', color: '#2f7de1', pitch: 0.95 };
@@ -68,13 +69,19 @@ export class EarthLevel extends Level {
       d.position.set(x, 0.24, ROAD_Z);
       this.scene.add(d);
     }
-    for (const sz of [ROAD_Z + 4.6, ROAD_Z - 4.6]) {
-      const sw = new THREE.Mesh(new THREE.BoxGeometry(220, 0.15, 2.2), new THREE.MeshStandardMaterial({ color: '#d9d4dc', roughness: 0.9 }));
-      sw.position.set(0, 0.26, sz);
-      sw.receiveShadow = true;
-      this.scene.add(sw);
-      this.world.addColliders([{ type: 'box', x: 0, z: sz, hw: 110, hd: 1.1, top: 0.335, bottom: -1 }]);
+    // the sidewalk in front of the houses leads straight to the park
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(220, 0.15, 2.2), new THREE.MeshStandardMaterial({ color: '#d9d4dc', roughness: 0.9 }));
+    sw.position.set(0, 0.26, WALK_Z);
+    sw.receiveShadow = true;
+    this.scene.add(sw);
+    this.world.addColliders([{ type: 'box', x: 0, z: WALK_Z, hw: 110, hd: 1.1, top: 0.335, bottom: -1 }]);
+    // backyard fences keep everyone away from the street behind the houses
+    for (let x = -60; x < 60; x += 10) {
+      const f = createFence(10);
+      f.position.set(x + 5, 0.2, -35.2);
+      this.scene.add(f);
     }
+    this.world.addColliders([{ type: 'box', x: 0, z: -35.4, hw: 110, hd: 0.4, top: 3, bottom: -1, noStand: true }]);
 
     // ---- houses along the street
     const houses = [
@@ -153,7 +160,13 @@ export class EarthLevel extends Level {
     treeSpots.push({ x: -30, z: 6, kind: 'round', color: '#7cc96b', scale: 1.2 }); // Mango's tree
     treeSpots.push({ x: 26, z: 18, kind: 'round', color: '#ffc4dc' }, { x: -24, z: 28, kind: 'tall', color: '#6fbf5f' }, { x: 30, z: -6, kind: 'round', color: '#7cc96b' });
     // street trees
-    for (let x = -55; x <= 55; x += 22) treeSpots.push({ x: x + 11, z: -9, kind: 'round', color: '#7cc96b', scale: 0.8 });
+    for (const x of [-55, -33, -11, 11, 33, 55]) treeSpots.push({ x, z: -16.5, kind: 'round', color: '#7cc96b', scale: 0.8 });
+    // pretty trees around Jacinta's house
+    treeSpots.push(
+      { x: -7.2, z: -24.6, kind: 'round', color: '#ffb3d1', scale: 0.9 }, { x: 7.4, z: -25, kind: 'round', color: '#ffc9e0', scale: 0.95 },
+      { x: -8, z: -31.5, kind: 'tall', color: '#6fbf5f', scale: 1.0 }, { x: 8.2, z: -31.8, kind: 'round', color: '#7cc96b', scale: 1.15 },
+      { x: -4.5, z: -33.5, kind: 'round', color: '#fbd3ff', scale: 0.8 }, { x: 4.6, z: -33.6, kind: 'tall', color: '#8fd47a', scale: 0.85 },
+    );
     const trees = createTrees(this.terrain, treeSpots, { seed: 3 });
     this.scene.add(trees.group);
     this.world.addColliders(trees.colliders);
@@ -171,7 +184,7 @@ export class EarthLevel extends Level {
 
     // grass & flowers
     const q = g.engine.q;
-    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 ? 0 : 1);
+    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 ? 0 : 1);
     this.scene.add(createGrass(this.terrain, { count: Math.floor(110000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.16, 0.38], width: [0.4, 0.6] }));
     this.scene.add(createFlowers(this.terrain, {
       count: Math.floor(3000 * q.grass), area: 120, center: [0, 14],
@@ -206,7 +219,7 @@ export class EarthLevel extends Level {
   _pathAmount(x, z) {
     // a ring path around the park and a path from the street to the wishing tree
     const ring = Math.abs(Math.hypot(x, z - 16) - 15);
-    const straight = Math.abs(x) < 1.4 && z > -10 && z < 40 ? 1 - Math.abs(x) / 1.4 : 0;
+    const straight = Math.abs(x) < 1.4 && z > -19.5 && z < 40 ? 1 - Math.abs(x) / 1.4 : 0;
     return Math.max(ring < 1.3 ? 1 - ring / 1.3 : 0, straight);
   }
 
@@ -664,6 +677,7 @@ export class EarthLevel extends Level {
 
   mapColor(x, z, h, out) {
     if (Math.abs(z - ROAD_Z) < 3.5) return out.set('#8a8694');
+    if (Math.abs(z - WALK_Z) < 1.1) return out.set('#e6e1e8');
     if (z < -27.4 && z > -32.6) for (const hx of [0, -22, 22, -44, 44]) if (Math.abs(x - hx) < 3) return out.set('#ffd6e6');
     const p = this._pathAmount(x, z);
     out.setHSL(0.28, 0.45, 0.6 + h * 0.03);

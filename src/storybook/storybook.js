@@ -9,7 +9,7 @@ import { drawThought } from './pinkySprite.js';
 import { rng } from './paint.js';
 import {
   S, toX, toY, DEPTH, makeGround, makeBlock, makeOneway, makeMover, makeBouncy, makeWater, makeThorns,
-  makeBunny, makeCheckpoint, makeGoal, scrapTexture, drawScrap, makeBackdrop, makeSky,
+  makeBunny, makeCheckpoint, makeGoal, scrapTexture, drawScrap, drawFinalPicture, makeBackdrop, makeSky,
 } from './world25d.js';
 import { LEVEL1 } from './level1.js';
 
@@ -22,7 +22,7 @@ const PH = {
   maxFall: 950, coyote: 0.1, buffer: 0.13, w: 32, h: 49, bunnyBounce: 640, bunnyBounceHeld: 880,
 };
 
-const SCRAP_NAMES = { hair: 'curly brown hair', hoodie: 'a pink hoodie with bear ears', smile: 'a smile… and a little pink pillow' };
+const SCRAP_NAMES = { hair: 'curly brown hair and two bright eyes', hoodie: 'a pink hoodie, blue shorts and white sneakers', smile: 'a gentle smile… and a little pink pillow, hugged tight' };
 
 export class Storybook {
   constructor(game) {
@@ -553,6 +553,14 @@ export class Storybook {
     a.vy = -p.vy / 58;
   }
 
+  // the first thing Pinky could land on below him
+  surfaceBelow(x, y) {
+    let best = 900;
+    for (const s of this.solids()) if (x > s.x && x < s.x + s.w && s.y >= y && s.y < best) best = s.y;
+    for (const p of this.platforms()) if (x > p.x && x < p.x + p.w && p.y >= y && p.y < best) best = p.y;
+    return best;
+  }
+
   _safeHere(x) {
     // not right at the edge of a gap
     for (const g of this.level.ground) if (x > g.x0 + 30 && x < g.x1 - 30) return true;
@@ -625,7 +633,7 @@ export class Storybook {
     const c = this.revealEl.querySelector('canvas');
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
-    drawScrap(g, id, c.width, c.height, true);
+    drawScrap(g, id, c.width, c.height);
     const n = this.run.scraps.length;
     const lines = {
       1: `A scrap of a drawing… ${SCRAP_NAMES[id]}. Pinky held it close. It felt familiar.`,
@@ -673,19 +681,8 @@ export class Storybook {
     const g = c.getContext('2d');
     const W = c.width, H = c.height;
     g.clearRect(0, 0, W, H);
-    g.fillStyle = '#fffaf0';
-    g.fillRect(20, 20, W - 40, H - 40);
-    // the three scraps placed together make a drawing of a girl hugging Pinky
-    const place = { hair: [W * 0.5, H * 0.3, 0.75], smile: [W * 0.5, H * 0.52, 0.75], hoodie: [W * 0.5, H * 0.75, 0.75] };
-    for (const id of ['hoodie', 'hair', 'smile']) {
-      const [x, y, s] = place[id];
-      g.save();
-      g.globalAlpha = this.run.scraps.includes(id) ? 1 : 0.15;
-      g.translate(x - 128 * s, y - 128 * s);
-      g.scale(s, s);
-      drawScrap(g, id, 256, 256, true);
-      g.restore();
-    }
+    // the scraps fit back together into one picture of a girl hugging Pinky
+    drawFinalPicture(g, W, H, this.run.scraps);
     const n = this.run.scraps.length;
     this.revealEl.querySelector('.sb-reveal-text').textContent = n === 3 ? 'All the pieces fit together: a girl with curly hair, hugging a pink pillow. Hugging HIM.' : `The pieces he found made part of a picture… (${n} of 3 scraps). Maybe there’s more to discover.`;
     this.revealEl.classList.remove('hidden');
@@ -808,8 +805,18 @@ export class Storybook {
     // camera: looks a little ahead of Pinky, follows smoothly
     const look = p.facing * 90 + p.vx * 0.25;
     this.camX += (p.x + look - this.camX) * Math.min(1, dt * 2.5);
-    const wantY = Math.min(p.y - 80, 360);
-    this.camY += (wantY - this.camY) * Math.min(1, dt * (p.grounded ? 3 : 1.4));
+    let wantY = Math.min(p.y - 80, 360);
+    let rate = p.grounded ? 3 : 1.4;
+    if (!p.grounded && p.vy > 150) {
+      // falling: look down toward where Pinky will land
+      const land = this.surfaceBelow(p.x, p.y);
+      wantY = Math.min(Math.max(p.y - 80, land - 140), 360);
+      rate = 4;
+    }
+    this.camY += (wantY - this.camY) * Math.min(1, dt * rate);
+    // never let Pinky drop out of view at the bottom or top of the screen
+    this.camY = Math.max(this.camY, p.y - 105);
+    this.camY = Math.min(this.camY, p.y + 60);
     let cx = toX(this.camX), cy = toY(this.camY);
     const prog = Math.min(1, Math.max(0, p.x / L.width));
     if (this.state === 'ending') {

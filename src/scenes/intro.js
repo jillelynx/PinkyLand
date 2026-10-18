@@ -157,6 +157,41 @@ function buildStrokes() {
   return [...chars, ...bg];
 }
 
+// The finished intro drawing (all strokes, on paper) — reused by Pinky's Storybook
+// so Jacinta looks exactly the same there.
+let _finished = null;
+export function renderIntroDrawing() {
+  if (_finished) return _finished;
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const g = off.getContext('2d');
+  const rand = makeRandom(9);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const st of buildStrokes()) {
+    g.globalCompositeOperation = st.bg ? 'destination-over' : 'source-over';
+    for (let i = 1; i < st.pts.length; i++) {
+      const [x0, y0] = st.pts[i - 1], [x1, y1] = st.pts[i];
+      for (let k = 0; k < 3; k++) {
+        g.strokeStyle = st.color;
+        g.globalAlpha = (st.alpha ?? 0.9) * (0.35 + rand() * 0.35);
+        g.lineWidth = st.width * (0.55 + rand() * 0.5);
+        g.beginPath();
+        g.moveTo(x0 + (rand() - 0.5) * 3, y0 + (rand() - 0.5) * 3);
+        g.lineTo(x1 + (rand() - 0.5) * 3, y1 + (rand() - 0.5) * 3);
+        g.stroke();
+      }
+    }
+  }
+  g.globalAlpha = 1;
+  // paper underneath everything
+  g.globalCompositeOperation = 'destination-over';
+  g.fillStyle = '#fffaf0';
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+  _finished = off;
+  return off;
+}
+
 export class Intro {
   constructor(root, audio) {
     this.audio = audio;

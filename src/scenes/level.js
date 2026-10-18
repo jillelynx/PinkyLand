@@ -48,6 +48,67 @@ export class Level {
     this.player.events.jump = (n) => g.audio.jump(n);
     this.player.events.bounce = () => g.audio.bounce();
     this.player.events.splash = (k) => g.audio.splash(k);
+    this.buildFlashlight();
+  }
+
+  // A warm flashlight the player carries. It turns on by itself when it gets dark
+  // (unless the player has switched it on or off with F or the 🔦 button).
+  buildFlashlight() {
+    const group = new THREE.Group();
+    const light = new THREE.SpotLight('#ffe9c2', 0, 34, 0.5, 0.55, 1.2);
+    light.castShadow = false;
+    light.position.set(0.2, 0.72, 0.3); // held at hand height
+    const target = new THREE.Object3D();
+    target.position.set(0.1, -0.6, 9);
+    group.add(light, target);
+    light.target = target;
+    // a soft glowing beam you can see in the air
+    const len = 7;
+    const geo = new THREE.ConeGeometry(Math.tan(0.42) * len, len, 24, 1, true);
+    geo.translate(0, -len / 2, 0);
+    geo.rotateX(-Math.PI / 2 + 0.17);
+    const beamMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uOn: { value: 0 } },
+      vertexShader: 'varying float vD; varying vec3 vN; varying vec3 vV; void main(){ vD = position.z; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
+      fragmentShader: 'uniform float uOn; varying float vD; varying vec3 vN; varying vec3 vV; void main(){ float fall = 1.0 - smoothstep(0.0, 7.0, vD); float edge = pow(abs(dot(vN, vV)), 1.5); gl_FragColor = vec4(vec3(1.0,0.93,0.75) * fall * edge * 0.16 * uOn, 1.0); }',
+    });
+    const beam = new THREE.Mesh(geo, beamMat);
+    beam.position.copy(light.position);
+    beam.frustumCulled = false;
+    group.add(beam);
+    // a tiny glowing bulb
+    const bulb = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#fff2c8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    bulb.position.copy(light.position);
+    bulb.scale.setScalar(0.16);
+    group.add(bulb);
+    this.player.root.add(group);
+    this.flashlight = { group, light, beam, beamMat, bulb, level: 0, on: false };
+  }
+
+  updateFlashlight(dt, night) {
+    const f = this.flashlight;
+    if (!f) return;
+    const g = this.game;
+    const mode = g.flashlightMode || 'auto';
+    const dark = night > 0.5 || (this.player.underwater && night > 0.3);
+    const want = mode === 'on' || (mode === 'auto' && dark);
+    if (want !== f.on) {
+      f.on = want;
+      g.ui.setFlashlight(want);
+      if (want && mode === 'auto' && !g.settings.flashlightTipShown) {
+        g.settings.flashlightTipShown = true;
+        g.ui.toast('🔦', 'It’s getting dark! Your flashlight turned on. Press <b>F</b> to switch it on or off.');
+        g.saveGame();
+      }
+    }
+    f.level += ((want ? 1 : 0) - f.level) * Math.min(1, dt * 6);
+    // a gentle flicker-free warm glow; lean the beam with the camera tilt a little
+    f.light.intensity = f.level * 55;
+    // (the light stays in the scene at zero brightness so turning it on never causes a hiccup)
+    f.beamMat.uniforms.uOn.value = f.level;
+    f.beam.visible = f.level > 0.01;
+    f.bulb.material.opacity = f.level * 0.6;
   }
 
   addCollectible(kind, id, pos, { onCollect, float = 0.6, scale = 1, journal = kind, nightOnly = false } = {}) {
@@ -152,6 +213,7 @@ export class Level {
     for (const wf of this.waterfalls) wf.update(dt, night);
 
     // chilly at night: Jacinta pulls up her hood and leg warmers
+    this.updateFlashlight(dt, night);
     const chilly = this.dayNight.isChilly() || p.pos.y > 30;
     for (const m of Object.values(g.avatarModels)) m.setChilly?.(chilly);
 
@@ -236,6 +298,15 @@ export class Level {
       grade.uniforms.uWarmth.value = this.dayNight.warmth();
     }
     g.ui.setClock(night, this.dayNight.hours);
+    // compass: which way the camera looks (north = toward -z, the top of the map)
+    const fwd = this.rig.forward(this._fwd || (this._fwd = new THREE.Vector3()));
+    const heading = (THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z)) + 360) % 360;
+    const sd = this.dayNight.sunDir;
+    const md = this.dayNight.uniforms.uMoonDir.value;
+    let skyIcon = null, skyBearing = 0;
+    if (sd.y > -0.03) { skyIcon = '☀️'; skyBearing = THREE.MathUtils.radToDeg(Math.atan2(sd.x, -sd.z)); }
+    else if (md.y > 0) { skyIcon = '🌙'; skyBearing = THREE.MathUtils.radToDeg(Math.atan2(md.x, -md.z)); }
+    g.ui.setCompass(heading, (skyBearing + 360) % 360, skyIcon);
   }
 
   collect(c) {

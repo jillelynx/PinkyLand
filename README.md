@@ -24,8 +24,9 @@ The title screen has two games:
 | Jump / double jump | Space (press again in the air) |
 | Glide (after finding the Sky Cape) | Hold Space while falling |
 | Swim up / dive down | Space / Shift |
-| Look around | Click and drag the mouse (or Q / C) |
-| Zoom | Mouse scroll (or + / −) |
+| Look around | Click and drag on the game, two-finger swipe left/right on a trackpad, or Q / C (R / V tilt up/down). Settings also has a "look by just moving the mouse" option. |
+| Zoom | Two-finger swipe up/down, pinch, mouse scroll, or + / − |
+| Flashlight | F (turns on by itself when it gets dark) |
 | Talk / pick up | E |
 | Switch character | Tab, or 1 2 3 4 |
 | Hint · Journal · Map | H · J · M |

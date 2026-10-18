@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { rng, crayonPattern, paperCanvas } from './paint.js';
+import { renderIntroDrawing } from '../scenes/intro.js';
 
 export const S = 1 / 58; // 58 game pixels = 1 meter
 export const GROUND_Y = 440;
@@ -368,55 +369,115 @@ export function scrapTexture(id) {
   });
 }
 
-export function drawScrap(g, id, W, H, torn = true) {
+// ---------------- The drawing of Jacinta hugging Pinky ----------------
+// One complete crayon picture. The three scraps Pinky finds are torn pieces of it,
+// so at the end of the chapter they fit back together like a puzzle.
+const PIC = 512;
+let _picture = null;
+
+function crayon(g, pts, color, width, seed = 1, alpha = 0.9) {
+  const r = rng(seed);
   g.save();
-  // torn paper edge
-  const r = rng(id.length * 31);
-  g.beginPath();
-  const pts = [];
-  const n = 28;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const rr = 0.42 + (torn ? (r() - 0.5) * 0.08 : 0);
-    pts.push([W / 2 + Math.cos(a) * W * rr * (1 + Math.abs(Math.cos(a)) * 0.15), H / 2 + Math.sin(a) * H * rr]);
+  g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = color;
+  for (let pass = 0; pass < 3; pass++) {
+    g.globalAlpha = alpha * (pass === 0 ? 0.85 : 0.45);
+    g.lineWidth = width * (pass === 0 ? 1 : 0.6);
+    g.beginPath();
+    pts.forEach(([x, y], i) => { const jx = x + (r() - 0.5) * 2.2, jy = y + (r() - 0.5) * 2.2; if (i) g.lineTo(jx, jy); else g.moveTo(jx, jy); });
+    g.stroke();
   }
-  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-  g.closePath();
-  g.fillStyle = '#fffaf0';
-  g.fill();
+  g.restore();
+}
+function ring(cx, cy, rx, ry, n = 36, turns = 1.05, start = 0) {
+  const pts = [];
+  for (let i = 0; i <= n * turns; i++) { const a = start + (i / n) * Math.PI * 2; pts.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+  return pts;
+}
+// fill a path with color and a waxy crayon texture
+function colorIn(g, pathFn, color, seed) {
+  g.save();
+  pathFn();
   g.clip();
-  g.drawImage(paperCanvas(256, '#fffaf0', 21), 0, 0, W, H);
-  g.lineCap = 'round'; g.lineJoin = 'round';
-  const cx = W / 2, cy = H / 2;
-  if (id === 'hair') {
-    // curly brown scribbles (her hair)
-    g.strokeStyle = '#4a2a1a'; g.lineWidth = 7;
-    for (let i = 0; i < 16; i++) {
-      const a = Math.PI * (0.9 + i * 0.08);
-      g.beginPath(); g.arc(cx + Math.cos(a) * 70, cy + 40 + Math.sin(a) * 70, 14, 0, Math.PI * 2 * 0.9); g.stroke();
+  g.globalAlpha = 0.55;
+  g.fillStyle = color;
+  g.fillRect(0, 0, PIC, PIC);
+  g.globalAlpha = 0.9;
+  g.fillStyle = crayonPattern(g, color, { density: 5, alpha: 0.8, angle: -0.5 + (seed % 3) * 0.3, seed, size: 128 });
+  g.fillRect(0, 0, PIC, PIC);
+  g.restore();
+}
+
+function drawPicture() {
+  if (_picture) return _picture;
+  // Crop Jacinta and Pinky out of the very same crayon drawing shown in the intro
+  const src = renderIntroDrawing();
+  const c = document.createElement('canvas');
+  c.width = c.height = PIC;
+  const g = c.getContext('2d');
+  g.drawImage(src, 470, 250, 640, 640, 0, 0, PIC, PIC);
+  _picture = c;
+  return c;
+}
+
+// the torn line between pieces (shared, so the pieces fit back together)
+function tearLine(y0, seed, amp = 22) {
+  const r = rng(seed);
+  const pts = [];
+  for (let x = 0; x <= PIC; x += 16) pts.push([x, y0 + (r() - 0.5) * amp + Math.sin(x * 0.05 + seed) * amp * 0.25]);
+  return pts;
+}
+// tear "a" runs between her eyes and her smile; tear "b" runs below Pinky's smile
+const TEARS = { a: tearLine(178, 5, 12), b: tearLine(330, 9, 18) };
+const PIECES = { hair: [null, 'a'], smile: ['a', 'b'], hoodie: ['b', null] };
+
+function piecePath(g, id) {
+  const [top, bottom] = PIECES[id];
+  g.beginPath();
+  const T = top ? TEARS[top] : [[0, 0], [PIC, 0]];
+  const B = bottom ? TEARS[bottom] : [[0, PIC], [PIC, PIC]];
+  T.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  for (let i = B.length - 1; i >= 0; i--) g.lineTo(B[i][0], B[i][1]);
+  g.closePath();
+}
+
+function pieceBounds(id) {
+  const [top, bottom] = PIECES[id];
+  const y0 = top ? Math.min(...TEARS[top].map((p) => p[1])) : 0;
+  const y1 = bottom ? Math.max(...TEARS[bottom].map((p) => p[1])) : PIC;
+  return [y0, y1];
+}
+
+// Draw one torn scrap (centered in a W×H canvas)
+export function drawScrap(g, id, W, H) {
+  const pic = drawPicture();
+  const [y0, y1] = pieceBounds(id);
+  const ph = y1 - y0;
+  const s = Math.min(W / PIC, H / ph) * 0.92;
+  g.save();
+  g.translate(W / 2 - (PIC * s) / 2, H / 2 - ((y0 + ph / 2) * s));
+  g.scale(s, s);
+  // paper shadow, then the piece
+  g.save(); g.translate(4, 6); piecePath(g, id); g.fillStyle = 'rgba(60,30,60,0.25)'; g.fill(); g.restore();
+  g.save(); piecePath(g, id); g.clip(); g.drawImage(pic, 0, 0); g.restore();
+  piecePath(g, id); g.strokeStyle = 'rgba(200,180,160,0.9)'; g.lineWidth = 2; g.stroke();
+  g.restore();
+}
+
+// The finished picture: pieces Pinky found are in place; missing ones are faint outlines
+export function drawFinalPicture(g, W, H, found) {
+  const pic = drawPicture();
+  const s = Math.min(W, H) / PIC * 0.94;
+  g.save();
+  g.translate((W - PIC * s) / 2, (H - PIC * s) / 2);
+  g.scale(s, s);
+  for (const id of Object.keys(PIECES)) {
+    if (found.includes(id)) {
+      g.save(); piecePath(g, id); g.clip(); g.drawImage(pic, 0, 0); g.restore();
+      piecePath(g, id); g.strokeStyle = 'rgba(200,180,160,0.7)'; g.lineWidth = 2; g.stroke();
+    } else {
+      g.save(); piecePath(g, id); g.fillStyle = 'rgba(255,255,255,0.35)'; g.fill();
+      g.setLineDash([10, 8]); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 3; g.stroke(); g.restore();
     }
-    for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(cx - 80 + (i % 2) * 8, cy + 30 + i * 18, 12, 0, 5.6); g.stroke(); g.beginPath(); g.arc(cx + 80 - (i % 2) * 8, cy + 30 + i * 18, 12, 0, 5.6); g.stroke(); }
-    g.fillStyle = '#f6d6c0'; g.beginPath(); g.arc(cx, cy + 50, 52, 0, Math.PI * 2); g.fill();
-  } else if (id === 'hoodie') {
-    // a pink hoodie with little bear ears
-    g.fillStyle = '#ff9ec4';
-    g.beginPath(); g.moveTo(cx - 50, cy - 40); g.lineTo(cx - 80, cy + 80); g.lineTo(cx + 80, cy + 80); g.lineTo(cx + 50, cy - 40); g.closePath(); g.fill();
-    g.strokeStyle = '#e0609a'; g.lineWidth = 6; g.stroke();
-    g.fillStyle = '#ff9ec4';
-    for (const s of [-1, 1]) { g.beginPath(); g.arc(cx + s * 52, cy - 46, 18, 0, Math.PI * 2); g.fill(); g.stroke(); }
-    g.fillStyle = '#6fc3e8'; g.fillRect(cx - 45, cy + 80, 90, 34);
-  } else if (id === 'smile') {
-    // her smile, and a little pink pillow hugged tight
-    g.fillStyle = '#f6d6c0'; g.beginPath(); g.arc(cx, cy - 40, 60, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#3a2316';
-    g.beginPath(); g.ellipse(cx - 22, cy - 50, 6, 9, 0, 0, 7); g.fill();
-    g.beginPath(); g.ellipse(cx + 22, cy - 50, 6, 9, 0, 0, 7); g.fill();
-    g.strokeStyle = '#d4506a'; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy - 30, 20, 0.2, Math.PI - 0.2); g.stroke();
-    g.fillStyle = '#ffd3de'; g.fillRect(cx - 34, cy + 22, 68, 90);
-    g.strokeStyle = '#f08aa8'; g.lineWidth = 5; g.strokeRect(cx - 34, cy + 22, 68, 90);
-    g.fillStyle = '#3366cc';
-    g.beginPath(); g.arc(cx - 12, cy + 44, 5, 0, 7); g.fill(); g.beginPath(); g.arc(cx + 12, cy + 44, 5, 0, 7); g.fill();
-    g.strokeStyle = '#3366cc'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 7, cy + 54); g.lineTo(cx - 7, cy + 58); g.quadraticCurveTo(cx, cy + 66, cx + 7, cy + 58); g.lineTo(cx + 7, cy + 54); g.stroke();
   }
   g.restore();
 }

@@ -141,12 +141,15 @@ export class DayNight {
     if (!this.paused) this.time = (this.time + dt / this.dayLength) % 1;
     this.uniforms.uTime.value += dt;
 
-    // Sun travels in a tilted circle. elevation = sin(angle)
-    const ang = (this.time - 0.25) * Math.PI * 2; // 0 at sunrise
-    const elev = Math.sin(ang);
-    this.sunDir.set(Math.cos(ang) * 0.85, elev, 0.45).normalize();
+    // Directions: north = -z (top of the map), east = +x, south = +z, west = -x.
+    // The sun rises due east, arcs across the southern sky, and sets due west.
+    const ang = (this.time - 0.25) * Math.PI * 2; // 0 at sunrise, PI/2 at noon, PI at sunset
+    const tilt = 0.5; // how far south the sun's path leans
+    this.sunDir.set(Math.cos(ang), Math.sin(ang) * Math.cos(tilt), Math.sin(ang) * Math.sin(tilt)).normalize();
+    const elev = this.sunDir.y / Math.cos(tilt); // keeps the old 0..1 elevation scale for colors
     this.uniforms.uSunDir.value.copy(this.sunDir);
-    this.uniforms.uMoonDir.value.set(-this.sunDir.x, -this.sunDir.y, -0.35).normalize();
+    // the moon is opposite the sun: it rises in the east at sunset
+    this.uniforms.uMoonDir.value.copy(this.sunDir).multiplyScalar(-1);
 
     // pick palette by elevation and morning/evening
     const morning = this.time < 0.5;

@@ -22,11 +22,40 @@ export class UI {
         </div>
         <div class="hud-top-right">
           <div class="clock" title="Time of day">☀️</div>
+          <button class="icon-btn flashlight" data-act="flashlight" title="Flashlight (F)">🔦<small>F</small></button>
           <button class="icon-btn hint" data-act="hint" title="Hint (H)">💡<small>H</small></button>
           <button class="icon-btn" data-act="journal" title="Journal (J)">📖<small>J</small></button>
           <button class="icon-btn" data-act="map" title="Map (M)">🗺️<small>M</small></button>
           <button class="icon-btn" data-act="chars" title="Characters (Tab)">👥<small>Tab</small></button>
           <button class="icon-btn" data-act="settings" title="Settings (Esc)">⚙️<small>Esc</small></button>
+        </div>
+        <div class="compass" title="Compass">
+          <svg viewBox="-60 -60 120 120" class="rose">
+            <circle r="56" class="rim"/>
+            <circle r="44" class="inner"/>
+            <g class="dial">
+              <g class="ticks"></g>
+              <polygon points="0,-40 6,-6 0,0 -6,-6" class="pt-n"/>
+              <polygon points="0,40 6,6 0,0 -6,6" class="pt"/>
+              <polygon points="40,0 6,6 0,0 6,-6" class="pt"/>
+              <polygon points="-40,0 -6,6 0,0 -6,-6" class="pt"/>
+              <polygon points="0,-40 -6,-6 0,0" class="pt-n2"/>
+              <polygon points="0,40 -6,6 0,0" class="pt2"/>
+              <polygon points="40,0 6,-6 0,0" class="pt2"/>
+              <polygon points="-40,0 -6,6 0,0" class="pt2"/>
+              <polygon points="20,-20 4,-1 0,0 1,-4" class="pt-s"/>
+              <polygon points="20,20 4,1 0,0 1,4" class="pt-s"/>
+              <polygon points="-20,20 -4,1 0,0 -1,4" class="pt-s"/>
+              <polygon points="-20,-20 -4,-1 0,0 -1,-4" class="pt-s"/>
+              <text x="0" y="-46" class="lbl n">N</text>
+              <text x="46" y="0" class="lbl">E</text>
+              <text x="0" y="46" class="lbl">S</text>
+              <text x="-46" y="0" class="lbl">W</text>
+            </g>
+            <circle r="3" class="hub"/>
+            <polygon points="0,-60 -6,-50 6,-50" class="facing"/>
+          </svg>
+          <span class="csky"></span>
         </div>
         <div class="prompt hidden"></div>
         <div class="toasts"></div>
@@ -55,6 +84,20 @@ export class UI {
     this.panel = root.querySelector('.panel');
     this.fadeEl = root.querySelector('.fade');
     this.chapterEl = root.querySelector('.chapter-card');
+    this.flashBtn = root.querySelector('.icon-btn.flashlight');
+    // compass rose: the dial turns so its N always points to real north
+    this.compassDial = root.querySelector('.compass .dial');
+    this.compassSky = root.querySelector('.compass .csky');
+    this.compassLabels = [...root.querySelectorAll('.compass .lbl')];
+    const ticks = root.querySelector('.compass .ticks');
+    for (let b = 0; b < 360; b += 15) {
+      const a = (b * Math.PI) / 180, r1 = b % 45 === 0 ? 50 : 52;
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', Math.sin(a) * r1); l.setAttribute('y1', -Math.cos(a) * r1);
+      l.setAttribute('x2', Math.sin(a) * 55); l.setAttribute('y2', -Math.cos(a) * 55);
+      l.setAttribute('class', 'tick');
+      ticks.appendChild(l);
+    }
     for (let i = 0; i < 5; i++) this.heartsEl.appendChild(Object.assign(document.createElement('div'), { className: 'heart' }));
     root.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -85,6 +128,23 @@ export class UI {
     const icon = night > 0.55 ? '🌙' : hours < 7.5 ? '🌅' : hours > 17 ? '🌇' : '☀️';
     if (this.clockEl.textContent !== icon) this.clockEl.textContent = icon;
   }
+
+  // heading: which way the camera faces, in degrees clockwise from north
+  setCompass(heading, skyBearing, skyIcon) {
+    this.compassDial.setAttribute('transform', `rotate(${-heading})`);
+    // keep the letters upright while the dial turns
+    for (const t of this.compassLabels) t.setAttribute('transform', `rotate(${heading} ${t.getAttribute('x')} ${t.getAttribute('y')})`);
+    if (skyIcon) {
+      const rel = ((skyBearing - heading) * Math.PI) / 180;
+      const R = 47; // percent of the compass size from the center
+      this.compassSky.style.left = 50 + Math.sin(rel) * R + '%';
+      this.compassSky.style.top = 50 - Math.cos(rel) * R + '%';
+      if (this.compassSky.textContent !== skyIcon) this.compassSky.textContent = skyIcon;
+      this.compassSky.style.opacity = 1;
+    } else this.compassSky.style.opacity = 0;
+  }
+
+  setFlashlight(on) { this.flashBtn.classList.toggle('on', !!on); }
 
   setAvatars(list, current) {
     const key = list.join(',') + '|' + current;
@@ -137,11 +197,12 @@ export class UI {
       <div><b>Move</b> <span class="key small">W</span><span class="key small">A</span><span class="key small">S</span><span class="key small">D</span> or arrow keys</div>
       <div><b>Run</b> hold <span class="key small">Shift</span></div>
       <div><b>Jump</b> <span class="key small">Space</span> (press twice to double jump)</div>
-      <div><b>Look</b> drag the mouse · <b>Zoom</b> scroll</div>
+      <div><b>Look</b> drag on the game, or two-finger swipe ↔ · <span class="key small">Q</span><span class="key small">C</span> turn</div>
+      <div><b>Zoom</b> two-finger swipe ↕ or scroll · <b>Light</b> <span class="key small">F</span></div>
       <div><b>Talk</b> <span class="key small">E</span> · <b>Hint</b> <span class="key small">H</span></div>
       <div><b>Swim</b> <span class="key small">Space</span> up, <span class="key small">Shift</span> dive</div>`;
     this.controlsEl.querySelector('.close').addEventListener('click', (e) => { e.stopPropagation(); this.showControls(false); this.game.settings.hideControls = true; this.game.saveGame(); });
-    this.avatarEl.style.bottom = on ? '210px' : '16px';
+    this.avatarEl.style.bottom = on ? '240px' : '16px';
   }
 
   // ---------- Dialogue ----------
@@ -303,7 +364,8 @@ export class UI {
         <label>Sound effects <input type="range" min="0" max="1" step="0.05" data-vol="sfx" value="${s.sfx}"></label>
         <label>Nature sounds <input type="range" min="0" max="1" step="0.05" data-vol="ambience" value="${s.ambience}"></label>
         <label>Graphics quality <select data-q><option value="high">High (best for Mac M4)</option><option value="medium">Medium</option><option value="low">Low (fastest)</option></select></label>
-        <label>Mouse look speed <input type="range" min="0.002" max="0.009" step="0.0005" data-sens value="${s.sensitivity}"></label>
+        <label>Camera turning speed <input type="range" min="0.002" max="0.012" step="0.0005" data-sens value="${s.sensitivity}"></label>
+        <label>Look around by just moving the mouse<br><small style="font-weight:400;color:#8a6a9a">Click the game to start; press Esc to get the mouse back</small> <input type="checkbox" data-ml ${s.mouseLook ? 'checked' : ''}></label>
         <label>Show controls help <input type="checkbox" data-ctl ${s.hideControls ? '' : 'checked'}></label>
       </div>
       <h2 style="font-size:26px;margin-top:18px">Controls</h2>
@@ -313,8 +375,9 @@ export class UI {
         <b>Jump / double jump</b><span>Space, press again in the air</span>
         <b>Glide (with cape)</b><span>Hold Space while falling</span>
         <b>Swim up / dive</b><span>Space / Shift (or X)</span>
-        <b>Look around</b><span>Click and drag, or Q / C keys</span>
-        <b>Zoom in / out</b><span>Mouse scroll, or + / − keys</span>
+        <b>Look around</b><span>Click and drag on the game, two-finger swipe left/right on a trackpad, or Q / C keys (R / V tilt up / down)</span>
+        <b>Zoom in / out</b><span>Two-finger swipe up/down, pinch, mouse scroll, or + / − keys</span>
+        <b>Flashlight</b><span>F (turns on by itself when it gets dark)</span>
         <b>Talk / pick up</b><span>E</span>
         <b>Switch character</b><span>Tab, or 1 2 3 4</span>
         <b>Hint · Journal · Map</b><span>H · J · M</span>
@@ -327,6 +390,7 @@ export class UI {
     this.panel.querySelectorAll('[data-vol]').forEach((r) => r.addEventListener('input', () => this.game.setVolume(r.dataset.vol, parseFloat(r.value))));
     this.panel.querySelector('[data-q]').addEventListener('change', (e) => this.game.setQuality(e.target.value));
     this.panel.querySelector('[data-sens]').addEventListener('input', (e) => this.game.setSensitivity(parseFloat(e.target.value)));
+    this.panel.querySelector('[data-ml]').addEventListener('change', (e) => this.game.setMouseLook(e.target.checked));
     this.panel.querySelector('[data-ctl]').addEventListener('change', (e) => { this.game.settings.hideControls = !e.target.checked; this.showControls(e.target.checked); this.game.saveGame(); });
     this.panel.querySelector('[data-resume]').addEventListener('click', () => this.close());
     this.panel.querySelector('[data-restart]').addEventListener('click', () => {

@@ -3,7 +3,8 @@ export class Input {
   constructor(canvas) {
     this.keys = new Set();
     this.pressed = new Set(); // keys pressed this frame
-    this.mouse = { dx: 0, dy: 0, dragging: false, wheel: 0 };
+    this.mouse = { dx: 0, dy: 0, dragging: false, wheel: 0, wheelX: 0 };
+    this.mouseLook = false; // when true, clicking the game locks the mouse for looking around
     this.canvas = canvas;
     this.enabled = true;
     this.gamepadPrev = {};
@@ -16,6 +17,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('pointerdown', (e) => {
+      if (this.mouseLook && document.pointerLockElement !== canvas) { try { canvas.requestPointerLock(); } catch (_) { /* ignore */ } }
       this.mouse.dragging = true;
       this.pressed.add('Mouse' + e.button);
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
@@ -27,7 +29,15 @@ export class Input {
         this.mouse.dy += e.movementY || 0;
       }
     });
-    canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.mouse.wheel += e.deltaY; }, { passive: false });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      // two-finger swipe on a trackpad: sideways turns the camera, up/down (or pinch) zooms
+      let dy = e.deltaY, dx = e.deltaX;
+      if (e.deltaMode === 1) { dy *= 16; dx *= 16; }
+      if (e.ctrlKey) dy *= 4; // pinch gesture
+      this.mouse.wheel += dy;
+      this.mouse.wheelX += dx;
+    }, { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -64,5 +74,6 @@ export class Input {
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.mouse.wheel = 0;
+    this.mouse.wheelX = 0;
   }
 }

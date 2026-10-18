@@ -133,17 +133,22 @@ function hexToRgb(hex, k = 1) {
   return [Math.min(255, c.r * 255 * k) | 0, Math.min(255, c.g * 255 * k) | 0, Math.min(255, c.b * 255 * k) | 0].join(',');
 }
 
+// Returns { full, hooded }: all the curls, and just the few that peek out of her hood
 function curlyHairGeometry(headR, rand, style) {
   const parts = [];
+  const hoodParts = [];
+  // a curl stays visible under the hood if it frames her face (inside the hood opening)
+  const peeks = (x, y, z) => Math.abs(Math.atan2(x, z)) < 0.72 && y > -0.75 * headR && z > 0.2 * headR;
   const colA = new THREE.Color(style.hair), colB = new THREE.Color(style.hairHighlight || style.hair);
-  const addColored = (g, t) => {
+  const addColored = (g, t, where = null, onlyHood = false) => {
     g = g.index ? g.toNonIndexed() : g;
     const c = colA.clone().lerp(colB, t);
     const arr = new Float32Array(g.attributes.position.count * 3);
     for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
     g.deleteAttribute('uv');
-    parts.push(g);
+    if (!onlyHood) parts.push(g);
+    if (onlyHood || (where && peeks(...where))) hoodParts.push(g);
   };
   // base volume of curls over the scalp (fibonacci sphere)
   const N = 150;
@@ -160,7 +165,7 @@ function curlyHairGeometry(headR, rand, style) {
     const g = rand() < 0.55 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
     g.rotateX(rand() * 6); g.rotateY(rand() * 6);
     g.translate(x * rr, y * rr, z * rr);
-    addColored(g, rand());
+    addColored(g, rand(), [x * rr, y * rr, z * rr]);
   }
   // longer curls falling to the shoulders around the back and sides
   const rings = style.hairLength === 'long' ? 7 : 4;
@@ -176,7 +181,7 @@ function curlyHairGeometry(headR, rand, style) {
       const g = rand() < 0.5 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
       g.rotateX(rand() * 6); g.rotateZ(rand() * 6);
       g.translate(x, yy + (rand() - 0.5) * 0.03, z);
-      addColored(g, rand());
+      addColored(g, rand(), [x, yy, z]);
     }
   }
   // fluffy bangs
@@ -186,11 +191,23 @@ function curlyHairGeometry(headR, rand, style) {
     const g = new THREE.TorusGeometry(s * 0.7, s * 0.4, 5, 8);
     g.rotateY(rand() * 3);
     g.translate(Math.sin(a) * headR * 0.88, headR * (0.6 + Math.cos(a * 2) * 0.08), Math.cos(a) * headR * 0.78);
-    addColored(g, rand());
+    addColored(g, rand(), [0, headR, headR]);
   }
-  const merged = mergeGeometries(parts);
-  merged.computeVertexNormals();
-  return merged;
+  // with the hood up, a few long curls spill out below it, in front of her shoulders
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 4; k++) {
+      const s = headR * (0.18 + rand() * 0.05);
+      const g = rand() < 0.5 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
+      g.rotateX(rand() * 6); g.rotateZ(rand() * 6);
+      g.translate(side * headR * (0.78 + k * 0.04), -headR * (0.95 + k * 0.26), headR * (0.42 - k * 0.04));
+      addColored(g, rand(), null, true);
+    }
+  }
+  const full = mergeGeometries(parts);
+  full.computeVertexNormals();
+  const hooded = mergeGeometries(hoodParts);
+  hooded.computeVertexNormals();
+  return { full, hooded };
 }
 
 export class Kid {
@@ -363,7 +380,12 @@ export class Kid {
 
     // hair
     if (kind === 'jacinta') {
-      const hair = mesh(curlyHairGeometry(headR, rand, style), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }));
+      const hairGeos = curlyHairGeometry(headR, rand, style);
+      const hairMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 });
+      const hair = mesh(hairGeos.full, hairMat);
+      this.hairHooded = mesh(hairGeos.hooded, hairMat);
+      this.hairHooded.visible = false;
+      this.head.add(this.hairHooded);
       this.head.add(hair);
       this.hair = hair;
     } else if (kind === 'liev') {
@@ -491,7 +513,7 @@ export class Kid {
       strap.position.set(s * 0.09, 0.02, 0.12);
       this.backpack.add(strap);
     }
-    this.backpack.position.set(0, torsoLen * 0.55, -torsoR * 0.8 - 0.06);
+    this.backpack.position.set(0, torsoLen * 0.55, kind === 'jacinta' ? -0.3 : -torsoR * 0.8 - 0.06);
     this.backpackSlot = new THREE.Group();
     this.backpackSlot.position.set(0.02, 0.12, 0);
     this.backpack.add(this.backpackSlot);
@@ -580,7 +602,9 @@ export class Kid {
     if (this.hoodUp) {
       this.hoodUp.visible = chilly;
       this.hoodDown.visible = !chilly;
-      if (this.hair) this.hair.scale.setScalar(chilly ? 0.94 : 1);
+      // hood up: only the curls framing her face (and a few spilling out) show
+      if (this.hair) this.hair.visible = !chilly;
+      if (this.hairHooded) this.hairHooded.visible = chilly;
     }
   }
 

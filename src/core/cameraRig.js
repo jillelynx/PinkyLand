@@ -38,7 +38,9 @@ export class CameraRig {
       this.yaw -= inp.mouse.dx * this.sensitivity;
       this.pitch += inp.mouse.dy * this.sensitivity;
       if (inp.down('KeyQ')) this.yaw += dt * 2.0;
-      if (inp.down('KeyE') && !inp._eUsed) this.yaw -= 0; // E is "talk"; rotation uses Q / Z / C
+      this.yaw += inp.mouse.wheelX * this.sensitivity * 0.9; // two-finger sideways swipe
+      if (inp.down('KeyR')) this.pitch -= dt * 1.4;
+      if (inp.down('KeyV')) this.pitch += dt * 1.4;
       if (inp.down('KeyZ')) this.yaw += dt * 2.0;
       if (inp.down('KeyC')) this.yaw -= dt * 2.0;
       if (inp.down('BracketLeft')) this.yaw += dt * 2.0;
@@ -52,7 +54,8 @@ export class CameraRig {
       if (inp.down('Minus', 'NumpadSubtract')) this.targetDistance = clamp(this.targetDistance + dt * 8, this.minDist, this.maxDist);
     }
     // gently swing behind the player while they walk (only if not dragging)
-    if (moving && playerYaw !== null && !inp.mouse.dragging && Math.abs(inp.mouse.dx) < 0.5) {
+    this._lookIdle = (inp.mouse.dragging || Math.abs(inp.mouse.dx) > 0.5 || Math.abs(inp.mouse.wheelX) > 0.5 || inp.down('KeyQ', 'KeyC', 'KeyZ')) ? 0 : (this._lookIdle || 0) + dt;
+    if (moving && playerYaw !== null && this._lookIdle > 1.2) {
       const behind = playerYaw + Math.PI;
       this.yaw = angleDamp(this.yaw, behind, 0.35, dt);
     }
