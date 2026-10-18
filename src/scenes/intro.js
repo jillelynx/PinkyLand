@@ -192,6 +192,34 @@ export function renderIntroDrawing() {
   return off;
 }
 
+// Just Jacinta, Pinky and the hearts from the intro drawing, on a clear background
+let _chars = null;
+export function renderIntroCharacters() {
+  if (_chars) return _chars;
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const g = off.getContext('2d');
+  const rand = makeRandom(9);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const st of buildStrokes()) {
+    if (st.bg) continue;
+    for (let i = 1; i < st.pts.length; i++) {
+      const [x0, y0] = st.pts[i - 1], [x1, y1] = st.pts[i];
+      for (let k = 0; k < 3; k++) {
+        g.strokeStyle = st.color;
+        g.globalAlpha = Math.min(1, (st.alpha ?? 0.9) * (0.55 + rand() * 0.35));
+        g.lineWidth = st.width * (0.65 + rand() * 0.5);
+        g.beginPath();
+        g.moveTo(x0 + (rand() - 0.5) * 3, y0 + (rand() - 0.5) * 3);
+        g.lineTo(x1 + (rand() - 0.5) * 3, y1 + (rand() - 0.5) * 3);
+        g.stroke();
+      }
+    }
+  }
+  _chars = off;
+  return off;
+}
+
 export class Intro {
   constructor(root, audio) {
     this.audio = audio;

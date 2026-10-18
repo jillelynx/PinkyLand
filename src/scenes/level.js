@@ -172,6 +172,62 @@ export class Level {
     obj.frustumCulled = false;
     this.scene.add(obj);
     this.trail = { obj, mat, t: 0 };
+    this.showBeacon(target);
+  }
+
+  // A tall, gently pulsing column of light (with a glowing ring on the ground) that
+  // marks where the hint is pointing. It stays until you get there.
+  showBeacon(target) {
+    if (this.beacon) { this.scene.remove(this.beacon.group); this.beacon = null; }
+    const group = new THREE.Group();
+    const ground = Math.max(this.world.groundHeight(target.x, target.z, target.y + 1), this.world.waterLevel);
+    group.position.set(target.x, Math.min(ground, target.y), target.z);
+    const uniforms = { uTime: { value: 0 }, uFade: { value: 0 } };
+    const colMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: `uniform float uTime; uniform float uFade; varying vec2 vUv;
+        void main(){
+          float up = 1.0 - vUv.y;
+          float a = pow(up, 1.6) * (0.55 + 0.25 * sin(uTime * 3.0)) * uFade;
+          float bands = 0.75 + 0.25 * sin(vUv.y * 40.0 - uTime * 4.0);
+          gl_FragColor = vec4(vec3(1.0, 0.82, 0.95) * a * bands, 1.0);
+        }`,
+    });
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 26, 24, 1, true), colMat);
+    col.position.y = 13;
+    col.frustumCulled = false;
+    group.add(col);
+    const ringMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: `uniform float uTime; uniform float uFade; varying vec2 vUv;
+        void main(){
+          float r = length(vUv - 0.5) * 2.0;
+          float ringPos = fract(uTime * 0.5);
+          float ring = smoothstep(0.08, 0.0, abs(r - ringPos)) * (1.0 - ringPos);
+          float glow = smoothstep(1.0, 0.0, r) * 0.45;
+          gl_FragColor = vec4(vec3(1.0, 0.85, 0.95) * (glow + ring) * uFade, 1.0);
+        }`,
+    });
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.08;
+    group.add(ring);
+    this.scene.add(group);
+    this.beacon = { group, uniforms, target: target.clone(), t: 0, leaving: false };
+  }
+
+  updateBeacon(dt) {
+    const b = this.beacon;
+    if (!b) return;
+    b.t += dt;
+    b.uniforms.uTime.value = b.t;
+    const d = Math.hypot(this.player.pos.x - b.target.x, this.player.pos.z - b.target.z);
+    if (d < 3.2 || b.t > 120) b.leaving = true;
+    const f = b.uniforms.uFade.value;
+    b.uniforms.uFade.value = b.leaving ? Math.max(0, f - dt * 1.5) : Math.min(1, f + dt * 2);
+    if (b.leaving && b.uniforms.uFade.value <= 0) { this.scene.remove(b.group); this.beacon = null; }
   }
 
   // --- things each level fills in
@@ -256,6 +312,7 @@ export class Level {
     target.y += p.stats.eye * 0.85;
     this.rig.update(dt, target, { underwater: p.swimming && p.pos.y < this.world.waterLevel - 0.6, playerYaw: p.yaw, moving: p.forwardMoving });
 
+    this.updateBeacon(dt);
     // hint trail fades out
     if (this.trail) {
       this.trail.t += dt;
@@ -306,7 +363,12 @@ export class Level {
     let skyIcon = null, skyBearing = 0;
     if (sd.y > -0.03) { skyIcon = '☀️'; skyBearing = THREE.MathUtils.radToDeg(Math.atan2(sd.x, -sd.z)); }
     else if (md.y > 0) { skyIcon = '🌙'; skyBearing = THREE.MathUtils.radToDeg(Math.atan2(md.x, -md.z)); }
-    g.ui.setCompass(heading, (skyBearing + 360) % 360, skyIcon);
+    let hintBearing = null;
+    if (this.beacon && !this.beacon.leaving) {
+      const t = this.beacon.target;
+      hintBearing = (THREE.MathUtils.radToDeg(Math.atan2(t.x - p.pos.x, -(t.z - p.pos.z))) + 360) % 360;
+    }
+    g.ui.setCompass(heading, (skyBearing + 360) % 360, skyIcon, hintBearing);
   }
 
   collect(c) {

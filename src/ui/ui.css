@@ -163,6 +163,8 @@ button { font-family: var(--round); cursor: pointer; }
 .compass .lbl.n { fill: #e0306a; }
 .compass .hub { fill: #fff; stroke: #8f7ac0; stroke-width: 1.5; }
 .compass .facing { fill: #ff8fb8; }
+.compass .chint { position: absolute; transform: translate(-50%, -50%); font-size: 18px; opacity: 0; filter: drop-shadow(0 0 6px rgba(255,120,200,1)); animation: hintPulse 1.2s infinite; transition: opacity .3s; }
+@keyframes hintPulse { 50% { transform: translate(-50%, -50%) scale(1.35); } }
 .compass .csky { position: absolute; transform: translate(-50%, -50%); font-size: 15px; filter: drop-shadow(0 0 4px rgba(255,200,80,.9)); transition: opacity .3s; }
 .icon-btn.flashlight.on { background: linear-gradient(180deg, #fff6c4, #ffd34d); box-shadow: 0 0 16px rgba(255,210,80,.8), var(--shadow); }
 

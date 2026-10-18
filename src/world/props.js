@@ -598,8 +598,9 @@ export function createPlayground() {
   for (const s of [-1, 1]) {
     for (const k of [-1, 1]) {
       const leg = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.8, 8), metal));
-      leg.position.set(s * 1.6, 1.3, k * 0.5);
-      leg.rotation.x = k * 0.3;
+      // A-frame: legs meet at the top bar and spread apart at the ground
+      leg.position.set(s * 1.6, 1.3, k * 0.42);
+      leg.rotation.x = -k * 0.3;
       swing.add(leg);
     }
   }

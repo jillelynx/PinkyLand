@@ -15,8 +15,9 @@ export const JACINTA = {
   hoodieInner: '#ff8fb8',
   shorts: '#6fc3e8', // "dolphin" shorts
   shortsTrim: '#ffffff',
-  shoes: '#ffffff',
-  shoeAccent: '#ff8fb8',
+  shoes: '#1d1b22', // black sneakers
+  shoeAccent: '#ff8fb8', // pink soles and laces
+  shoeTrim: '#22c4c9', // turquoise stripe
   legWarmers: ['#ffd1e3', '#ffffff'],
   height: 1.0,
 };
@@ -28,12 +29,12 @@ export const LIEV = {
   hairHighlight: '#6b4a32',
   eyes: '#4a3826',
   brows: '#4b3322',
-  jersey: '#2f7de1',
+  jersey: '#d8283a', // red and white jersey
   jerseyStripe: '#ffffff',
-  jerseyNumber: '10',
+  jerseyNumber: '12',
   shorts: '#ffffff',
-  shortsTrim: '#2f7de1',
-  socks: '#2f7de1',
+  shortsTrim: '#d8283a',
+  socks: '#d8283a',
   shoes: '#ff5a3c',
   shoeAccent: '#ffffff',
   height: 1.1,

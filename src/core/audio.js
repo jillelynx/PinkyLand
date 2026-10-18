@@ -167,12 +167,13 @@ export class AudioEngine {
     }
   }
 
-  bird() {
+  bird(vol = 1) {
+    if (!this.started) return;
     const c = this.ctx, t = c.currentTime;
     const base = 2200 + Math.random() * 1800;
     const notes = 2 + Math.floor(Math.random() * 4);
     const pan = c.createStereoPanner ? c.createStereoPanner() : null;
-    const out = c.createGain(); out.gain.value = 0.05 + Math.random() * 0.04;
+    const out = c.createGain(); out.gain.value = (0.05 + Math.random() * 0.04) * (vol > 1 ? 1 : vol) * (vol < 1 ? 2.2 : 1);
     if (pan) { pan.pan.value = Math.random() * 2 - 1; out.connect(pan).connect(this.ambGain); } else out.connect(this.ambGain);
     out.connect(this.reverb);
     for (let i = 0; i < notes; i++) {
@@ -455,6 +456,53 @@ export class AudioEngine {
     if (!this.started) return;
     const t = this.ctx.currentTime;
     [12, 7, 16].forEach((n, i) => this._tone(midiToHz(79 + n), t + i * 0.09, { dur: 0.5, vol: 0.07 }));
+  }
+
+  bark() {
+    if (!this.started) return;
+    const c = this.ctx, t = c.currentTime;
+    for (const d of [0, 0.22]) {
+      this._tone(420, t + d, { dur: 0.13, vol: 0.18, slide: 0.55, type: 'sawtooth' });
+      const s = this._noiseSource(false); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900;
+      const g = c.createGain(); g.gain.setValueAtTime(0.12, t + d); g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.1);
+      s.connect(f).connect(g).connect(this.sfxGain); s.start(t + d); s.stop(t + d + 0.12);
+    }
+  }
+
+  meow() {
+    if (!this.started) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 4;
+    const g = c.createGain();
+    o.frequency.setValueAtTime(520, t); o.frequency.linearRampToValueAtTime(760, t + 0.18); o.frequency.linearRampToValueAtTime(480, t + 0.55);
+    f.frequency.setValueAtTime(900, t); f.frequency.linearRampToValueAtTime(1800, t + 0.2); f.frequency.linearRampToValueAtTime(800, t + 0.55);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.06); g.gain.linearRampToValueAtTime(0, t + 0.6);
+    o.connect(f).connect(g).connect(this.sfxGain); o.start(t); o.stop(t + 0.65);
+  }
+
+  purr() {
+    if (!this.started) return;
+    const c = this.ctx, t = c.currentTime;
+    const s = this._noiseSource(false); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 180;
+    const am = c.createOscillator(); am.frequency.value = 26; const amG = c.createGain(); amG.gain.value = 0.5;
+    const g = c.createGain(); g.gain.value = 0;
+    const env = c.createGain(); env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.5, t + 0.3); env.gain.linearRampToValueAtTime(0, t + 1.6);
+    am.connect(amG).connect(g.gain);
+    s.connect(f).connect(g).connect(env).connect(this.sfxGain); s.start(t); am.start(t); s.stop(t + 1.7); am.stop(t + 1.7);
+  }
+
+  squeak() {
+    if (!this.started) return;
+    const t = this.ctx.currentTime;
+    this._tone(2600, t, { dur: 0.08, vol: 0.08, slide: 1.3 });
+    this._tone(2900, t + 0.12, { dur: 0.07, vol: 0.07, slide: 1.25 });
+  }
+
+  chatter() {
+    if (!this.started) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 6; i++) this._tone(1800 + Math.random() * 400, t + i * 0.07, { dur: 0.04, vol: 0.07, type: 'square', slide: 0.7 });
   }
 
   hurt() {

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { rng, crayonPattern, paperCanvas } from './paint.js';
-import { renderIntroDrawing } from '../scenes/intro.js';
+import { renderIntroCharacters } from '../scenes/intro.js';
 
 export const S = 1 / 58; // 58 game pixels = 1 meter
 export const GROUND_Y = 440;
@@ -409,12 +409,66 @@ function colorIn(g, pathFn, color, seed) {
 
 function drawPicture() {
   if (_picture) return _picture;
-  // Crop Jacinta and Pinky out of the very same crayon drawing shown in the intro
-  const src = renderIntroDrawing();
+  // A classic kid's drawing: blue sky across the top, a sun in the corner, grass along
+  // the bottom, and Jacinta & Pinky (exactly as in the intro) on clean white paper.
   const c = document.createElement('canvas');
   c.width = c.height = PIC;
   const g = c.getContext('2d');
-  g.drawImage(src, 470, 250, 640, 640, 0, 0, PIC, PIC);
+  g.drawImage(paperCanvas(512, '#fffdf7', 21), 0, 0);
+  const r = rng(31);
+  const scribble = (y0, y1, color, width, step) => {
+    g.save(); g.lineCap = 'round'; g.strokeStyle = color;
+    let dir = 1;
+    for (let y = y0; y <= y1; y += step) {
+      for (let pass = 0; pass < 2; pass++) {
+        g.globalAlpha = pass ? 0.4 : 0.75; g.lineWidth = width * (pass ? 0.6 : 1);
+        g.beginPath();
+        const a = dir > 0 ? -10 : PIC + 10, b = dir > 0 ? PIC + 10 : -10;
+        g.moveTo(a, y + (r() - 0.5) * 4); g.lineTo(b, y + step * 0.5 + (r() - 0.5) * 4); g.stroke();
+      }
+      dir = -dir;
+    }
+    g.restore();
+  };
+  // blue sky strip
+  scribble(0, 92, '#7ec8ff', 16, 12);
+  crayon(g, Array.from({ length: 33 }, (_, i) => [i * 16, 100 + Math.sin(i * 0.8) * 3]), '#5aa8e8', 4, 3);
+  // sun in the top corner with rays
+  g.save(); g.beginPath(); g.arc(PIC - 6, 6, 70, 0, Math.PI * 2); g.clip(); scribble(0, 80, '#ffd84a', 14, 9); g.restore();
+  crayon(g, ring(PIC - 6, 6, 70, 70, 40, 0.3, Math.PI * 0.48), '#ffb020', 5, 4);
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI * 0.52 + (i / 6) * Math.PI * 0.46;
+    crayon(g, [[PIC - 6 + Math.cos(a) * 84, 6 + Math.sin(a) * 84], [PIC - 6 + Math.cos(a) * 118, 6 + Math.sin(a) * 118]], '#ffb020', 5, 10 + i);
+  }
+  // a fluffy cloud
+  crayon(g, [...ring(120, 60, 26, 20, 20, 0.5, Math.PI), ...ring(160, 50, 30, 26, 20, 0.5, Math.PI), ...ring(200, 60, 24, 18, 20, 0.5, Math.PI)], '#ffffff', 6, 6);
+  // green grass along the bottom only
+  scribble(452, PIC, '#7fd36a', 16, 11);
+  crayon(g, Array.from({ length: 33 }, (_, i) => [i * 16, 450 + Math.sin(i * 1.3) * 4]), '#3f9a3a', 5, 7);
+  for (const [fx, fc] of [[40, '#ff6fae'], [95, '#ffe24a'], [430, '#b48aff'], [485, '#ff9a3c']]) {
+    crayon(g, [[fx, 470], [fx + 2, 440]], '#3f9a3a', 4, fx);
+    crayon(g, ring(fx + 2, 432, 9, 9, 14, 1.2), fc, 8, fx + 1);
+  }
+  // Jacinta & Pinky from the intro, with a clean white "halo" so nothing shows through them
+  const chars = renderIntroCharacters();
+  const sx = 470, sy = 250, sw = 640, sh = 640;
+  const fig = document.createElement('canvas');
+  fig.width = fig.height = PIC;
+  const fg = fig.getContext('2d');
+  fg.drawImage(chars, sx, sy, sw, sh, 0, 0, PIC, PIC);
+  const sil = document.createElement('canvas');
+  sil.width = sil.height = PIC;
+  const sg = sil.getContext('2d');
+  sg.drawImage(fig, 0, 0);
+  sg.globalCompositeOperation = 'source-in';
+  sg.fillStyle = '#fffdf7';
+  sg.fillRect(0, 0, PIC, PIC);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    g.drawImage(sil, Math.cos(a) * 9, Math.sin(a) * 9);
+  }
+  g.drawImage(sil, 0, 0);
+  g.drawImage(fig, 0, 0);
   _picture = c;
   return c;
 }

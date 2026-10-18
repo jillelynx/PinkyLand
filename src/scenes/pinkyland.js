@@ -94,7 +94,7 @@ export class PinkyLandLevel extends Level {
     const slopeAt = (x, z) => { const nn = this.terrain.getNormal(x, z); return 1 - nn.y; };
     const nearCamp = (x, z) => Math.hypot(x - CAMP.x, z - CAMP.z) < 4.5;
     this.scene.add(createGrass(this.terrain, {
-      count: Math.floor(200000 * q.grass), area: 250, center: [0, 0], height: [0.25, 0.7], width: [0.45, 0.7],
+      count: Math.floor(200000 * q.grass), area: 250, center: [0, 0], height: [0.25, 0.7], width: [0.55, 0.85],
       where: (x, z, h) => (h > 0.9 && slopeAt(x, z) < 0.35 && !nearCamp(x, z) ? 1 : 0),
       tint: (x, z, c, r) => { if (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.35) c.offsetHSL(-0.12 + r() * 0.02, -0.1, 0.05); },
     }));
@@ -454,9 +454,13 @@ export class PinkyLandLevel extends Level {
     const g = this.game;
     this.sitting = true;
     const campH = this.terrain.getHeight(CAMP.x, CAMP.z);
-    const spots = [[CAMP.x + 1.9, CAMP.z + 1.2], [CAMP.x - 1.9, CAMP.z + 1.2], [CAMP.x, CAMP.z + 2.3]];
+    // sit ON the three logs around the fire (same spots the logs were placed at)
+    const spots = [0, 1, 2].map((i) => { const a = Math.PI * 0.3 + i * 0.9; return [CAMP.x + Math.cos(a) * 2.2, CAMP.z + Math.sin(a) * 2.2]; });
+    const LOG_TOP = 0.44;
     const placeSitter = (root, model, [x, z]) => {
-      root.position.set(x, campH + 0.05, z);
+      // a sitting kid's bottom is about one shin-length above their feet; pillows sit flat
+      const seatDrop = model.dims ? model.dims.shin * model.body.scale.y : 0;
+      root.position.set(x, campH + LOG_TOP - seatDrop, z);
       root.rotation.y = Math.atan2(CAMP.x - x, CAMP.z - z);
       model.anim.sit = true;
       model.anim.speed = 0;

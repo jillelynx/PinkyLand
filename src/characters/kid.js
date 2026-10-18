@@ -133,74 +133,101 @@ function hexToRgb(hex, k = 1) {
   return [Math.min(255, c.r * 255 * k) | 0, Math.min(255, c.g * 255 * k) | 0, Math.min(255, c.b * 255 * k) | 0].join(',');
 }
 
-// Returns { full, hooded }: all the curls, and just the few that peek out of her hood
+// Spiral (corkscrew) ringlet hanging down from a root point.
+function ringlet(root, out, { length, radius, turns, tube, phase, flare = 0.04 }) {
+  const pts = [];
+  const n = Math.max(24, Math.round(turns * 14));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const a = phase + t * turns * Math.PI * 2;
+    const r = radius * (1 - 0.25 * t);
+    // hangs down, drifting outward a little so the hair has volume
+    pts.push(new THREE.Vector3(
+      root.x + out.x * flare * t + Math.cos(a) * r,
+      root.y - t * length,
+      root.z + out.z * flare * t + Math.sin(a) * r,
+    ));
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, tube, 5, false);
+}
+
+// A short spiral sticking out from the scalp (for curly volume on top)
+function scalpSpiral(pos, normal, { length, radius, turns, tube, phase }) {
+  const up = Math.abs(normal.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const u = new THREE.Vector3().crossVectors(normal, up).normalize();
+  const v = new THREE.Vector3().crossVectors(normal, u).normalize();
+  const pts = [];
+  const n = Math.round(turns * 12);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const a = phase + t * turns * Math.PI * 2;
+    pts.push(pos.clone().addScaledVector(normal, t * length).addScaledVector(u, Math.cos(a) * radius).addScaledVector(v, Math.sin(a) * radius));
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, tube, 5, false);
+}
+
+// Returns { full, hooded }: all her spiral curls, and just the few that peek out of her hood.
+// Her face (the front of her head) is always kept clear.
 function curlyHairGeometry(headR, rand, style) {
   const parts = [];
   const hoodParts = [];
-  // a curl stays visible under the hood if it frames her face (inside the hood opening)
-  const peeks = (x, y, z) => Math.abs(Math.atan2(x, z)) < 0.72 && y > -0.75 * headR && z > 0.2 * headR;
   const colA = new THREE.Color(style.hair), colB = new THREE.Color(style.hairHighlight || style.hair);
-  const addColored = (g, t, where = null, onlyHood = false) => {
+  const add = (g, t, { full = true, hood = false } = {}) => {
     g = g.index ? g.toNonIndexed() : g;
+    g.deleteAttribute('uv');
     const c = colA.clone().lerp(colB, t);
     const arr = new Float32Array(g.attributes.position.count * 3);
     for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    g.deleteAttribute('uv');
-    if (!onlyHood) parts.push(g);
-    if (onlyHood || (where && peeks(...where))) hoodParts.push(g);
+    if (full) parts.push(g);
+    if (hood) hoodParts.push(g);
   };
-  // base volume of curls over the scalp (fibonacci sphere)
-  const N = 150;
-  for (let i = 0; i < N; i++) {
-    const y = 1 - (i / (N - 1)) * 1.6; // from top down to below equator
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
+  const long = style.hairLength === 'long';
+  // 1) a smooth hair "cap" over the top and back of the head (hairline sits high on the forehead)
+  const cap = new THREE.SphereGeometry(headR * 1.04, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.58);
+  cap.rotateX(-0.5); // tip it back so the forehead and face stay clear
+  add(cap, 0.15);
+  // 2) short springy spirals over the cap for curly volume
+  for (let i = 0; i < 46; i++) {
+    const y = 1 - (i / 45) * 1.1;
+    const rr = Math.sqrt(Math.max(0, 1 - y * y));
     const phi = i * 2.39996;
-    const x = Math.cos(phi) * r, z = Math.sin(phi) * r;
-    // keep the face clear
-    if (z > 0.35 && y < 0.42) continue;
-    if (z > 0.0 && y < 0.05 && Math.abs(x) < 0.85) continue;
-    const s = headR * (0.2 + rand() * 0.1);
-    const rr = headR * (1.02 + rand() * 0.1);
-    const g = rand() < 0.55 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
-    g.rotateX(rand() * 6); g.rotateY(rand() * 6);
-    g.translate(x * rr, y * rr, z * rr);
-    addColored(g, rand(), [x * rr, y * rr, z * rr]);
+    const nrm = new THREE.Vector3(Math.cos(phi) * rr, y, Math.sin(phi) * rr).normalize();
+    // stay on the cap: skip the forehead/face area
+    const tipped = nrm.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), 0.42);
+    if (tipped.y < 0.0) continue;
+    if (nrm.z > 0.55 && nrm.y < 0.55) continue;
+    add(scalpSpiral(nrm.clone().multiplyScalar(headR * 1.02), nrm, { length: headR * (0.1 + rand() * 0.07), radius: headR * 0.085, turns: 1.6 + rand() * 0.6, tube: headR * 0.055, phase: rand() * 6 }), rand());
   }
-  // longer curls falling to the shoulders around the back and sides
-  const rings = style.hairLength === 'long' ? 7 : 4;
-  for (let ring = 0; ring < rings; ring++) {
-    const yy = -headR * (0.15 + ring * 0.27);
-    const count = 16 + Math.min(ring, 3);
+  // 3) long corkscrew ringlets hanging around the sides and back — never across her face
+  const rows = long ? [[0.32, 20, 0.85], [0.02, 24, 1.0], [-0.28, 26, 1.1]] : [[0.1, 18, 0.5]];
+  rows.forEach(([yy, count, lenK], row) => {
+    const ringR = Math.sqrt(1 - yy * yy) * headR * 1.02;
     for (let k = 0; k < count; k++) {
-      const spread = ring < 3 ? 1.55 : 1.7; // lower curls wrap forward over the shoulders
-      const a = Math.PI * 0.5 + (k / (count - 1) - 0.5) * Math.PI * spread; // around the back
-      const rad = headR * (0.95 + Math.min(ring, 4) * 0.09 + rand() * 0.08);
-      const x = Math.cos(a) * rad, z = -Math.sin(a) * rad * 0.9;
-      const s = headR * (0.2 + rand() * 0.07);
-      const g = rand() < 0.5 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
-      g.rotateX(rand() * 6); g.rotateZ(rand() * 6);
-      g.translate(x, yy + (rand() - 0.5) * 0.03, z);
-      addColored(g, rand(), [x, yy, z]);
+      // angle measured from the front of her face; keep a clear window in front
+      const minA = row === 0 ? 1.05 : 1.15;
+      const ang = minA + (k / (count - 1)) * (Math.PI * 2 - minA * 2) + (rand() - 0.5) * 0.08;
+      const out = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+      const root = new THREE.Vector3(out.x * ringR, yy * headR, out.z * ringR);
+      // curls near her face are shorter; the back ones fall well past her shoulders
+      const nearFace = 1 - Math.min(1, (Math.abs(((ang + Math.PI) % (Math.PI * 2)) - Math.PI) - 1.0) / 1.2);
+      const length = headR * (long ? 1.3 + rand() * 0.6 : 0.6) * lenK * (1 - nearFace * 0.35);
+      add(ringlet(root, out, { length, radius: headR * (0.08 + rand() * 0.03), turns: 4 + rand() * 2.5, tube: headR * (0.055 + rand() * 0.015), phase: rand() * 6, flare: headR * (0.25 + row * 0.15) }), rand());
     }
+  });
+  // 4) a few little spiral bangs high on her forehead (above her eyes)
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 4 - 0.5) * 1.1;
+    const nrm = new THREE.Vector3(Math.sin(a) * 0.55, 0.72, Math.cos(a) * 0.55).normalize();
+    add(scalpSpiral(nrm.clone().multiplyScalar(headR * 1.0), new THREE.Vector3(nrm.x * 0.4, -0.2, 1).normalize(), { length: headR * 0.25, radius: headR * 0.07, turns: 2.2, tube: headR * 0.045, phase: rand() * 6 }), rand(), { full: true, hood: true });
   }
-  // fluffy bangs
-  for (let k = 0; k < 9; k++) {
-    const a = (k / 8 - 0.5) * 1.5;
-    const s = headR * (0.17 + rand() * 0.05);
-    const g = new THREE.TorusGeometry(s * 0.7, s * 0.4, 5, 8);
-    g.rotateY(rand() * 3);
-    g.translate(Math.sin(a) * headR * 0.88, headR * (0.6 + Math.cos(a * 2) * 0.08), Math.cos(a) * headR * 0.78);
-    addColored(g, rand(), [0, headR, headR]);
-  }
-  // with the hood up, a few long curls spill out below it, in front of her shoulders
+  // 5) hood up: a few ringlets peek out the sides of the hood opening and spill below it
   for (const side of [-1, 1]) {
-    for (let k = 0; k < 4; k++) {
-      const s = headR * (0.18 + rand() * 0.05);
-      const g = rand() < 0.5 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.TorusGeometry(s * 0.7, s * 0.38, 5, 8);
-      g.rotateX(rand() * 6); g.rotateZ(rand() * 6);
-      g.translate(side * headR * (0.78 + k * 0.04), -headR * (0.95 + k * 0.26), headR * (0.42 - k * 0.04));
-      addColored(g, rand(), null, true);
+    for (let k = 0; k < 3; k++) {
+      const ang = side * (0.72 + k * 0.1);
+      const out = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+      const root = new THREE.Vector3(out.x * headR * 0.98, headR * (0.15 - k * 0.12), out.z * headR * 0.98);
+      add(ringlet(root, out, { length: headR * (1.1 + k * 0.25), radius: headR * 0.085, turns: 4.5, tube: headR * 0.055, phase: rand() * 6, flare: headR * 0.15 }), rand(), { full: false, hood: true });
     }
   }
   const full = mergeGeometries(parts);
@@ -315,6 +342,20 @@ export class Kid {
       sole.scale.set(0.07, 0.018, 0.118);
       sole.position.set(0, -0.06, 0.035);
       foot.add(sole);
+      if (style.shoeTrim) {
+        // a colored stripe around the sneaker, plus colored laces
+        const stripe = mesh(new THREE.TorusGeometry(1, 0.08, 6, 24), mat(style.shoeTrim, { roughness: 0.5 }));
+        stripe.rotation.x = Math.PI / 2;
+        stripe.scale.set(0.069, 0.116, 0.05);
+        stripe.position.set(0, -0.035, 0.035);
+        foot.add(stripe);
+        for (let i = 0; i < 3; i++) {
+          const lace = mesh(new THREE.BoxGeometry(0.05, 0.007, 0.008), mat(style.shoeAccent || '#ffffff'));
+          lace.position.set(0, -0.0 + 0.004 * i, 0.06 + i * 0.022);
+          lace.rotation.x = -0.5;
+          foot.add(lace);
+        }
+      }
       this.legs.push({ leg, knee, foot, warmer });
     }
 

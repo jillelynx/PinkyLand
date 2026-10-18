@@ -11,6 +11,7 @@ import { Creatures } from '../world/creatures.js';
 import { Kid } from '../characters/kid.js';
 import { KIDS } from '../characters/style.js';
 import { NPC, Follower } from '../characters/npc.js';
+import { Pet, PET_LOOKS, Songbirds } from '../world/pets.js';
 import { makeNoise2D, makeRandom, smoothstep } from '../util/noise.js';
 
 const ROAD_Z = -44; // the street runs BEHIND the houses, so Jacinta never has to cross it
@@ -177,15 +178,15 @@ export class EarthLevel extends Level {
     this.scene.add(createBushes(this.terrain, Array.from({ length: 30 }, (_, i) => {
       const a = (i / 30) * Math.PI * 2;
       return { x: Math.cos(a) * 30, z: 14 + Math.sin(a) * 26, color: i % 4 ? '#5fae55' : '#7fc06a' };
-    }).filter((b) => b.z > -6)));
+    }).filter((b) => b.z > -6 && Math.hypot(b.x + 29.2, b.z - 7.6) > 3.5)));
     const rocks = createRocks(this.terrain, [{ x: -8, z: 30 }, { x: 14, z: 36, scale: 1.5 }, { x: -34, z: 20 }, { x: 32, z: 30, scale: 1.2 }]);
     this.scene.add(rocks.group);
     this.world.addColliders(rocks.colliders);
 
     // grass & flowers
     const q = g.engine.q;
-    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 ? 0 : 1);
-    this.scene.add(createGrass(this.terrain, { count: Math.floor(110000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.16, 0.38], width: [0.4, 0.6] }));
+    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 || Math.hypot(x + 29.2, z - 7.6) < 1.6 ? 0 : 1);
+    this.scene.add(createGrass(this.terrain, { count: Math.floor(140000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.18, 0.4], width: [0.55, 0.8] }));
     this.scene.add(createFlowers(this.terrain, {
       count: Math.floor(3000 * q.grass), area: 120, center: [0, 14],
       where: (x, z) => (z < -6 ? 0 : (noise(x * 0.07, z * 0.07) > 0.2 ? 0.9 : 0.05)) * (1 - this._pathAmount(x, z) * 2),
@@ -270,7 +271,7 @@ export class EarthLevel extends Level {
     if (pm) {
       const bird = pm.scene.clone();
       bird.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-      bird.scale.setScalar(0.0045);
+      bird.scale.setScalar(0.0068);
       bird.rotation.y = 0;
       this.mango.add(bird);
       this.mangoMixer = new THREE.AnimationMixer(bird);
@@ -280,10 +281,97 @@ export class EarthLevel extends Level {
       this.mangoBird = bird;
     }
     this.scene.add(this.mango);
+    // a little tree stump for Mango to rest on, so he's easy to spot above the grass
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.44, 12), new THREE.MeshStandardMaterial({ color: '#8a5a3c', roughness: 1 }));
+    stump.position.set(-29.2, this.terrain.getHeight(-29.2, 7.6) + 0.22, 7.6);
+    stump.castShadow = stump.receiveShadow = true;
+    this.scene.add(stump);
+    const rings = new THREE.Mesh(new THREE.CircleGeometry(0.29, 16), new THREE.MeshStandardMaterial({ color: '#d9b38c' }));
+    rings.rotation.x = -Math.PI / 2;
+    rings.position.set(-29.2, this.terrain.getHeight(-29.2, 7.6) + 0.445, 7.6);
+    this.scene.add(rings);
     this.mangoT = 0;
     this.updaters.push((dt) => this.updateMango(dt));
 
     this.applyQuestState();
+    this.buildPets();
+  }
+
+  // Jacinta's furry neighbors — she can talk to all of them
+  buildPets() {
+    const g = this.game;
+    const W = this.world;
+    const homes = {
+      buddy: { x: 1.8, z: -24.2, r: 2.2, follow: 26 },
+      gil: { x: 1.4, z: -26.7, r: 0.6 },
+      joe: { x: -6.6, z: -25.6, r: 1.1 },
+      molly: { x: -1.9, z: -26.6, r: 0.7 },
+      bagel: { x: -2.6, z: -26.1, r: 0.7 },
+      albany: { x: 6.8, z: -23.8, r: 1.8, tree: { x: 7.4, z: -25, h: 2.4 } },
+    };
+    this.pets = {};
+    for (const [key, home] of Object.entries(homes)) {
+      const pet = new Pet(PET_LOOKS[key], W, home);
+      if (key === 'buddy') pet.followPlayer = true;
+      if (key === 'gil') { pet.state = 'sit'; pet.stateT = 6; }
+      this.scene.add(pet.root);
+      this.pets[key] = pet;
+    }
+    this.songbirds = new Songbirds(this.scene, W, { center: { x: 0, z: -24 }, count: 6 });
+    const PK = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
+    const talks = {
+      buddy: { sound: 'bark', color: '#d98a3c', lines: [
+        ['Woof! Woof woof! *wag wag wag*', 'Buddy says you’re his favorite person in the whole world. He wants to come to the park with you!'],
+        ['*sniff sniff* Woof!', 'Buddy smelled a squirrel. He says he’s not going to chase it. Probably.'],
+        ['Arf! *rolls over*', 'Buddy wants a belly rub! His legs are short, but his heart is BIG.'],
+      ] },
+      gil: { sound: 'meow', color: '#4a4a5a', lines: [
+        ['Mrrrrow.', 'Gil says this sunny spot on the porch is HIS spot. But you can sit next to him.'],
+        ['Mew. *slow blink*', 'A slow blink from a cat means “I love you.” Gil just said it to you!'],
+      ] },
+      joe: { sound: 'purr', color: '#4a4a5a', lines: [
+        ['Prrrrrrrr…', 'Joe’s fur is SO long and fluffy. He says he loves being brushed.'],
+        ['Mrrp?', 'Joe wants to know if you have any treats. He always wants treats.'],
+      ] },
+      molly: { sound: 'squeak', color: '#9a98a2', lines: [
+        ['Squeak! Squeak!', 'Molly says thank you for the strawberry! She’s saving half of it for later.'],
+        ['*whiskers wiggle*', 'Molly is gray and white, and she’s the best at climbing. She says hi to Pinky!'],
+      ] },
+      bagel: { sound: 'squeak', color: '#6a4a38', lines: [
+        ['Squeak squeak squeak!', 'Bagel found a cracker crumb and he is VERY proud of it.'],
+        ['*sniff sniff*', 'Bagel’s little white paws look like he’s wearing socks. He likes it when you notice.'],
+      ] },
+      albany: { sound: 'chatter', color: '#b9b3c8', lines: [
+        ['Chk-chk-chk! *flicks tail*', 'Albany says she’s the only WHITE squirrel in the whole town. She’s very proud of that.'],
+        ['Chk! Chk-chk!', () => (this.mangoState === 'hurt' ? 'Albany says she saw a little red parrot on a tree stump on the west side of the park. He looked hurt!' : 'Albany says the acorns are extra crunchy this year.')],
+      ] },
+    };
+    const keyNames = { buddy: 'Buddy', gil: 'Gil', joe: 'Joe', molly: 'Molly', bagel: 'Bagel', albany: 'Albany' };
+    for (const [key, pet] of Object.entries(this.pets)) {
+      const tk = talks[key];
+      let idx = 0;
+      this.addInteractable({
+        pos: () => pet.root.position, radius: 2.0, label: `Talk to ${keyNames[key]}`,
+        action: async () => {
+          this.journalCheck(key, keyNames[key]);
+          g.audio[tk.sound]?.();
+          if (key !== 'albany' || pet.state !== 'climb') { pet.state = key === 'buddy' ? 'sit' : pet.state; pet.stateT = 3; }
+          const [sound, meaning] = tk.lines[idx % tk.lines.length];
+          idx++;
+          await g.ui.dialogue([
+            { who: keyNames[key], color: tk.color, pitch: key === 'buddy' ? 0.8 : 1.8, text: sound },
+            { ...PK, text: typeof meaning === 'function' ? meaning() : meaning },
+          ]);
+        },
+      });
+    }
+    // songbirds go in the journal when you see them
+    this.updaters.push((dt) => {
+      const p = this.player.pos;
+      for (const pet of Object.values(this.pets)) pet.update(dt, p);
+      this.songbirds.update(dt, p);
+      if (!this._sawBirds && this.songbirds.birds.some((b) => b.m.position.distanceTo(p) < 8)) { this._sawBirds = true; this.journalCheck('songbird', 'Songbirds'); }
+    });
   }
 
   applyQuestState() {
@@ -294,7 +382,7 @@ export class EarthLevel extends Level {
     else { this.maya.model.setMood('hurt'); this.maya.model.anim.sit = true; }
     // Oliver
     if (has('oliver')) { this.oliver.model.setMood('happy'); this.oliver.model.anim.sit = false; this.oliver.root.position.set(-8, this.terrain.getHeight(-8, 21), 21); this.oliver.wander = { x: -10, z: 18, r: 4 }; }
-    else { this.oliver.model.setMood('sad'); this.oliver.model.anim.sit = true; this.oliver.fixedY = true; this.oliver.root.position.y = this.terrain.getHeight(12.2, 14.3) + 0.05; }
+    else { this.oliver.model.setMood('sad'); this.oliver.model.anim.sit = true; this.oliver.fixedY = true; this.sitOnBench(this.oliver, 12, 14); }
     // Sam & Brock
     if (has('bully')) { this.sam.model.setMood('happy'); this.brock.model.setMood('happy'); }
     else { this.sam.model.setMood('sad'); this.sam.model.playAction('sad', 9999); this.brock.model.setMood('mean'); this.brock.model.anim.persist = true; }
@@ -303,12 +391,27 @@ export class EarthLevel extends Level {
     else this.mangoState = 'hurt';
   }
 
+  // place a kid so they sit ON the bench seat (feet dangling), not inside it
+  sitOnBench(npc, x, z) {
+    const SEAT_TOP = 0.48;
+    const m = npc.model;
+    const seatDrop = m.dims ? m.dims.shin * m.body.scale.y : 0;
+    npc.root.position.set(x, this.terrain.getHeight(x, z) + SEAT_TOP - seatDrop, z);
+  }
+
   updateMango(dt) {
     this.mangoMixer?.update(this.mangoState === 'hurt' ? 0 : dt);
     this.mangoT += dt;
     if (this.mangoState === 'hurt') {
       const x = -29.2, z = 7.6;
-      this.mango.position.set(x, this.terrain.getHeight(x, z) + 0.05 + Math.abs(Math.sin(this.mangoT * 1.5)) * 0.02, z);
+      this.mango.position.set(x, this.terrain.getHeight(x, z) + 0.46 + Math.abs(Math.sin(this.mangoT * 1.5)) * 0.02, z);
+      // chirp now and then so Jacinta can find him by listening
+      this._chirpT = (this._chirpT ?? 2) - dt;
+      if (this._chirpT < 0) {
+        this._chirpT = 2.5 + Math.random() * 2;
+        const d = this.player.pos.distanceTo(this.mango.position);
+        if (d < 30) this.game.audio.bird(Math.max(0.15, 1 - d / 30));
+      }
       this.mango.rotation.set(0, 2.4, 0.35); // wing drooping
       if (this.mangoAction) this.mangoAction.time = 0.15;
     } else if (this.mangoState === 'carried') {
@@ -537,7 +640,7 @@ export class EarthLevel extends Level {
           this.giveHeart('mango', this.rosa.root.position);
           return;
         }
-        if (this.mangoState === 'hurt') return g.ui.dialogue([line({ who: 'Mrs. Rosa', color: '#c76b98', pitch: 0.85 }, 'Oh dear, oh dear. My parrot Mango flew out the window this morning and hasn’t come back. Have you seen a little green bird?')]);
+        if (this.mangoState === 'hurt') return g.ui.dialogue([line({ who: 'Mrs. Rosa', color: '#c76b98', pitch: 0.85 }, 'Oh dear, oh dear. My parrot Mango flew out the window this morning and hasn’t come back. Have you seen a little red and blue parrot?')]);
         return g.ui.dialogue([line({ who: 'Mrs. Rosa', color: '#c76b98', pitch: 0.85 }, 'Mango hasn’t stopped singing since you brought him home! Come by for cookies any time, dear.')]);
       },
     });
@@ -647,19 +750,27 @@ export class EarthLevel extends Level {
     const E = this.E;
     const has = (id) => E.hearts.includes(id);
     const P = (o) => o.root.position.clone();
-    if (!E.liev && this.lievNPC) return { text: 'Liev is near the park entrance doing kick-ups. Let’s say hi!', target: P(this.lievNPC) };
     if (E.hearts.length >= 5) return { text: 'All five hearts are glowing! Walk through the magic door at the Wishing Tree!', target: this.portal.group.position.clone() };
     if (this.mangoState === 'carried') return { text: 'Mango lives in the purple house. Let’s carry him to Mrs. Rosa!', target: P(this.rosa) };
     if (E.bandage) return { text: 'We have the bandage! Let’s bring it to Maya.', target: P(this.maya) };
-    if (!has('maya') && E.mayaMet) return { text: 'Mr. Hughes the park helper has a first aid kit. His green hut is on the other side of the park.', target: P(this.hughes) };
-    if (!has('maya')) return { text: 'I think someone fell off their bike near the path. Let’s see if they’re okay.', target: P(this.maya) };
-    if (!has('oliver')) return { text: 'Someone is sitting all alone on a bench. Maybe they’re sad?', target: P(this.oliver) };
-    if (!has('bully')) return { text: 'I hear someone upset at the playground. Let’s go see.', target: P(this.sam) };
-    if (this.mangoState === 'hurt') return { text: 'I heard a little bird chirping under a tree on the west side of the park.', target: this.mango.position.clone() };
+    // Kindness can be done in ANY order: point to whichever unfinished one is closest
+    const options = [];
+    if (!E.liev && this.lievNPC) options.push({ text: 'Liev is near the park entrance doing kick-ups. Let’s say hi — he can help!', target: P(this.lievNPC) });
+    if (!has('maya') && E.mayaMet) options.push({ text: 'Mr. Hughes the park helper has a first aid kit for Maya. His green hut is on the other side of the park.', target: P(this.hughes) });
+    else if (!has('maya')) options.push({ text: 'I think someone fell off their bike near the path. Let’s see if they’re okay.', target: P(this.maya) });
+    if (!has('oliver')) options.push({ text: 'Someone is sitting all alone on a bench. Maybe they’re sad?', target: P(this.oliver) });
+    if (!has('bully')) options.push({ text: 'I hear someone upset at the playground. Let’s go see.', target: P(this.sam) });
+    if (this.mangoState === 'hurt') options.push({ text: 'Listen… a little bird is chirping! He’s on a tree stump on the west side of the park.', target: this.mango.position.clone() });
     if (!has('litter')) {
-      const left = this.collectibles.find((c) => c.kind === 'litter' && !c.taken);
-      if (left) return { text: 'There’s litter in the park. Let’s pick it up so animals don’t get hurt!', target: left.obj.position.clone() };
-      return { text: 'Now put the litter in the green trash bin by the path.', target: this.binPos.clone() };
+      const p = this.player.pos;
+      const left = this.collectibles.filter((c) => c.kind === 'litter' && !c.taken).sort((a, b) => a.obj.position.distanceTo(p) - b.obj.position.distanceTo(p))[0];
+      if (left) options.push({ text: 'There’s litter nearby. Let’s pick it up so animals don’t get hurt!', target: left.obj.position.clone() });
+      else options.push({ text: 'Now put the litter in the green trash bin by the path.', target: this.binPos.clone() });
+    }
+    if (options.length) {
+      const p = this.player.pos;
+      options.sort((a, b) => Math.hypot(a.target.x - p.x, a.target.z - p.z) - Math.hypot(b.target.x - p.x, b.target.z - p.z));
+      return options[0];
     }
     return null;
   }

@@ -35,7 +35,8 @@ export function addWind(material, { strength = 0.18, heightPow = 2.0, push = tru
           float bend = (1.0 - smoothstep(0.0, 1.4, dist)) * step(abs(ip.y - uPlayer.y), 2.0);
           #ifdef USE_INSTANCING
             vec3 away = normalize(vec3(toP.x, 0.0, toP.y) + 1e-4);
-            away = (inverse(mat3(instanceMatrix)) * away);
+            away = transpose(mat3(instanceMatrix)) * away; // cheap 'undo rotation'
+            away = normalize(away + 1e-4);
             transformed += away * bend * 0.6 * k;
             transformed.y -= bend * 0.25 * k;
           #endif` : ''}
@@ -77,15 +78,32 @@ function bladeGeometry() {
  * Scatter grass across terrain.
  * @param where (x,z,h) => density 0..1
  */
-export function createGrass(terrain, { count = 60000, area = 200, center = [0, 0], where, seed = 11, tint, height = [0.3, 0.75], width = [0.45, 0.75] } = {}) {
+// A little clump of 3 blades (more grass for the same cost)
+function clumpGeometry() {
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    const b = bladeGeometry();
+    b.rotateY((i / 3) * Math.PI * 2 + i * 0.4);
+    b.scale(1, 0.8 + i * 0.15, 1);
+    b.translate(Math.cos(i * 2.1) * 0.05, 0, Math.sin(i * 2.1) * 0.05);
+    parts.push(b);
+  }
+  return mergeGeometries(parts);
+}
+
+/**
+ * Scatter grass across terrain. Grass is split into square tiles so tiles that
+ * are off-screen aren't drawn, which lets us have lots more grass.
+ * @param where (x,z,h) => density 0..1
+ */
+export function createGrass(terrain, { count = 60000, area = 200, center = [0, 0], where, seed = 11, tint, height = [0.3, 0.75], width = [0.45, 0.75], tile = 22 } = {}) {
   const rand = makeRandom(seed);
-  const geo = bladeGeometry();
+  const geo = clumpGeometry();
   const mat = addWind(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 }),
     { strength: 0.22, heightPow: 1.6, push: true, key: 'grass' });
-  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  const buckets = new Map();
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
-  const c = new THREE.Color();
   let n = 0, tries = 0;
   while (n < count && tries < count * 4) {
     tries++;
@@ -100,18 +118,25 @@ export function createGrass(terrain, { count = 60000, area = 200, center = [0, 0
     const hs = height[0] + rand() * (height[1] - height[0]);
     s.set(width[0] + rand() * (width[1] - width[0]), hs, 1);
     m.compose(p, q, s);
-    mesh.setMatrixAt(n, m);
-    c.setHSL(0.24 + rand() * 0.08, 0.55 + rand() * 0.2, 0.55 + rand() * 0.15);
+    const c = new THREE.Color().setHSL(0.24 + rand() * 0.08, 0.55 + rand() * 0.2, 0.55 + rand() * 0.15);
     if (tint) tint(x, z, c, rand);
-    mesh.setColorAt(n, c);
+    const key = Math.floor(x / tile) + ',' + Math.floor(z / tile);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push([m.clone(), c]);
     n++;
   }
-  mesh.count = n;
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.receiveShadow = true;
-  mesh.frustumCulled = false;
-  return mesh;
+  const group = new THREE.Group();
+  for (const list of buckets.values()) {
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach(([mm, cc], i) => { mesh.setMatrixAt(i, mm); mesh.setColorAt(i, cc); });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.boundingSphere.radius += 1.5; // room for swaying
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
 function flowerHeadGeometry(petals = 5) {

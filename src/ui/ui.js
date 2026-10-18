@@ -56,6 +56,7 @@ export class UI {
             <polygon points="0,-60 -6,-50 6,-50" class="facing"/>
           </svg>
           <span class="csky"></span>
+          <span class="chint">✨</span>
         </div>
         <div class="prompt hidden"></div>
         <div class="toasts"></div>
@@ -88,6 +89,7 @@ export class UI {
     // compass rose: the dial turns so its N always points to real north
     this.compassDial = root.querySelector('.compass .dial');
     this.compassSky = root.querySelector('.compass .csky');
+    this.compassHint = root.querySelector('.compass .chint');
     this.compassLabels = [...root.querySelectorAll('.compass .lbl')];
     const ticks = root.querySelector('.compass .ticks');
     for (let b = 0; b < 360; b += 15) {
@@ -130,7 +132,13 @@ export class UI {
   }
 
   // heading: which way the camera faces, in degrees clockwise from north
-  setCompass(heading, skyBearing, skyIcon) {
+  setCompass(heading, skyBearing, skyIcon, hintBearing = null) {
+    if (hintBearing !== null) {
+      const rel = ((hintBearing - heading) * Math.PI) / 180;
+      this.compassHint.style.left = 50 + Math.sin(rel) * 30 + '%';
+      this.compassHint.style.top = 50 - Math.cos(rel) * 30 + '%';
+      this.compassHint.style.opacity = 1;
+    } else this.compassHint.style.opacity = 0;
     this.compassDial.setAttribute('transform', `rotate(${-heading})`);
     // keep the letters upright while the dial turns
     for (const t of this.compassLabels) t.setAttribute('transform', `rotate(${heading} ${t.getAttribute('x')} ${t.getAttribute('y')})`);
