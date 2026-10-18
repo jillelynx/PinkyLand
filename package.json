@@ -1,0 +1,14 @@
+{
+  "name": "pinky-land",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A cozy 3D exploration game with Jacinta, Pinky and Liev.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  }
+}
