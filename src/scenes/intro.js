@@ -154,7 +154,50 @@ function buildStrokes() {
   // kids draw the people first, then color the world in behind them
   const chars = S.slice(charStart);
   const bg = S.slice(0, charStart).map((k) => ({ ...k, bg: true }));
-  return [...chars, ...bg];
+  // before the world is coloured in behind them, the characters get a solid
+  // paper "cut-out" so no grass or sky crayon shows through their bodies
+  return [...chars, { mask: true, bg: true, pts: [[0, 0], [0, 0]], color: '#000', width: 1 }, ...bg];
+}
+
+// Paper-coloured silhouettes of everything the child drew in the foreground.
+// Drawn underneath the characters (destination-over) before the background.
+function drawSilhouettes(g) {
+  g.save();
+  g.globalCompositeOperation = 'destination-over';
+  g.globalAlpha = 1;
+  g.fillStyle = '#fffaf0'; g.strokeStyle = '#fffaf0';
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const jx = 640, jy = 600;
+  // head and curls
+  g.beginPath(); g.ellipse(jx, jy - 135, 108, 112, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(jx - 90, jy - 30, 26, 85, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(jx + 90, jy - 30, 26, 85, 0, 0, Math.PI * 2); g.fill();
+  // hoodie dress (trapezoid) + bear ears
+  g.beginPath(); g.moveTo(jx - 52, jy - 78); g.lineTo(jx + 52, jy - 78); g.lineTo(jx + 94, jy + 92); g.lineTo(jx - 94, jy + 92); g.closePath(); g.fill();
+  for (const sx of [-55, 55]) { g.beginPath(); g.arc(jx + sx, jy - 70, 24, 0, Math.PI * 2); g.fill(); }
+  // shorts, arms, legs, shoes
+  g.fillRect(jx - 62, jy + 64, 124, 68);
+  g.lineWidth = 26;
+  for (const seg of [[[jx - 50, jy - 50], [jx - 120, jy + 30]], [[jx + 50, jy - 50], [jx + 135, jy + 10]], [[jx - 25, jy + 110], [jx - 30, jy + 200]], [[jx + 25, jy + 110], [jx + 32, jy + 200]], [[jx - 50, jy + 205], [jx - 20, jy + 205]], [[jx + 20, jy + 205], [jx + 52, jy + 205]]]) {
+    g.beginPath(); g.moveTo(...seg[0]); g.lineTo(...seg[1]); g.stroke();
+  }
+  // Pinky
+  const px = 880, py = 610;
+  g.beginPath();
+  g.moveTo(px - 96, py - 136); g.lineTo(px, py - 124); g.lineTo(px + 96, py - 136); g.lineTo(px + 86, py); g.lineTo(px + 96, py + 136); g.lineTo(px, py + 126); g.lineTo(px - 96, py + 136); g.lineTo(px - 86, py); g.closePath(); g.fill();
+  // hearts
+  for (const [hx, hy, sc] of [[770, 330, 1], [820, 270, 0.7], [720, 280, 0.6], [1150, 420, 0.8]]) {
+    g.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const t = (i / 40) * Math.PI * 2;
+      const x = hx + 16 * Math.pow(Math.sin(t), 3) * 2.2 * sc, y = hy - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 2.2 * sc;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    g.fill();
+  }
+  // little pinky friend
+  g.fillRect(1202, 642, 96, 66);
+  g.restore();
 }
 
 // The finished intro drawing (all strokes, on paper) — reused by Pinky's Storybook
@@ -168,6 +211,7 @@ export function renderIntroDrawing() {
   const rand = makeRandom(9);
   g.lineCap = 'round'; g.lineJoin = 'round';
   for (const st of buildStrokes()) {
+    if (st.mask) { drawSilhouettes(g); continue; }
     g.globalCompositeOperation = st.bg ? 'destination-over' : 'source-over';
     for (let i = 1; i < st.pts.length; i++) {
       const [x0, y0] = st.pts[i - 1], [x1, y1] = st.pts[i];
@@ -202,7 +246,7 @@ export function renderIntroCharacters() {
   const rand = makeRandom(9);
   g.lineCap = 'round'; g.lineJoin = 'round';
   for (const st of buildStrokes()) {
-    if (st.bg) continue;
+    if (st.bg || st.mask) continue;
     for (let i = 1; i < st.pts.length; i++) {
       const [x0, y0] = st.pts[i - 1], [x1, y1] = st.pts[i];
       for (let k = 0; k < 3; k++) {
@@ -293,6 +337,7 @@ export class Intro {
       if (count + len <= this.drawn) { count += len; continue; }
       const start = Math.max(1, this.drawn - count);
       const end = Math.min(len, n - count);
+      if (s.mask) { if (end > start || end >= len) drawSilhouettes(g); count += len; if (count >= n) break; continue; }
       for (let i = start; i < end; i++) {
         const [x0, y0] = s.pts[i - 1], [x1, y1] = s.pts[i];
         // crayon: several thin jittered passes

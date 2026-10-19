@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeRandom, angleDamp } from '../util/noise.js';
 import { sharedUniforms } from './terrain.js';
+import { addDragonWings } from './dragons.js';
 
 import foxData from '../../assets/models/Fox.glb';
 import parrotData from '../../assets/models/Parrot.glb';
@@ -157,7 +158,7 @@ export class Creatures {
   }
 
   // Horses galloping across the meadow
-  addHorses({ center, radius = 30, count = 2, scale = 0.0085 }) {
+  addHorses({ center, radius = 30, count = 2, scale = 0.0085, wings = false }) {
     const g = this.models.horse;
     if (!g) return;
     for (let i = 0; i < count; i++) {
@@ -172,8 +173,11 @@ export class Creatures {
       act.time = i * 0.3;
       const c = { name: 'Dream Horse', journalKey: 'horse', object: holder, mixer, t: i * 0.6 };
       const r = radius + i * 4;
+      // dragon wings, folded while they gallop, with a happy flutter now and then
+      const wingSet = wings ? addDragonWings(holder, horse, { color: ['#ffd1e3', '#d6c8ff'][i % 2], bone: ['#c76b98', '#7a5ab8'][i % 2] }) : null;
       c.update = (dt) => {
         mixer.update(dt);
+        if (wingSet) { const flutter = Math.sin(c.t * 9) > 0.6 ? Math.sin(performance.now() * 0.02) * 0.5 : 0; for (const w of wingSet) w.pose(flutter, 0.75); }
         c.t += dt * 0.14;
         // an egg-shaped loop through the meadow
         const x = center.x + Math.cos(c.t) * r;
@@ -182,6 +186,45 @@ export class Creatures {
         const nz = center.z + Math.sin(c.t + 0.02) * r * 0.6;
         holder.position.set(x, Math.max(this.world.terrainHeight(x, z), this.world.waterLevel - 0.6), z);
         holder.rotation.y = Math.atan2(nx - x, nz - z);
+      };
+      this.list.push(c);
+    }
+  }
+
+  // Horses with dragon wings soaring over the island
+  addWingedHorses({ center, radius = 40, height = 16, count = 2, scale = 0.0085 }) {
+    const g = this.models.horse;
+    if (!g) return;
+    const cols = [['#ffe7a8', '#e0a030'], ['#bfe6ff', '#3a8ac0'], ['#ffd1e3', '#c76b98']];
+    for (let i = 0; i < count; i++) {
+      const horse = prepare(g.scene.clone());
+      horse.scale.setScalar(scale);
+      const holder = new THREE.Group();
+      holder.add(horse);
+      this.scene.add(holder);
+      const mixer = new THREE.AnimationMixer(horse);
+      const act = mixer.clipAction(g.animations[0]);
+      act.play(); act.timeScale = 0.6; act.time = i * 0.4;
+      const wingSet = addDragonWings(holder, horse, { color: cols[i % 3][0], bone: cols[i % 3][1], span: 1.2 });
+      const c = { name: 'Dragon-Winged Horse', journalKey: 'dragonhorse', object: holder, mixer, t: (i / count) * Math.PI * 2, y: undefined };
+      const r = radius * (0.85 + i * 0.2), dir = i % 2 ? -1 : 1;
+      c.update = (dt) => {
+        mixer.update(dt);
+        c.t += dt * 0.12 * dir;
+        const x = center.x + Math.cos(c.t) * r, z = center.z + Math.sin(c.t) * r * 0.75;
+        const nx = center.x + Math.cos(c.t + 0.05 * dir) * r, nz = center.z + Math.sin(c.t + 0.05 * dir) * r * 0.75;
+        const W = this.world;
+        let ground = Math.max(W.terrainHeight(x, z), W.waterLevel);
+        for (const k of [0.2, 0.4]) ground = Math.max(ground, W.terrainHeight(center.x + Math.cos(c.t + k * dir) * r, center.z + Math.sin(c.t + k * dir) * r * 0.75));
+        const want = Math.max(height + Math.sin(c.t * 3) * 3, ground + 7);
+        c.y = c.y === undefined ? want : c.y + (want - c.y) * Math.min(1, dt);
+        holder.position.set(x, c.y, z);
+        holder.rotation.y = Math.atan2(nx - x, nz - z);
+        holder.rotation.z = -dir * 0.15;
+        // flap, flap, flap… then a long glide
+        const glide = Math.sin(c.t * 5) > 0.3;
+        const flap = glide ? 0.15 : Math.sin(performance.now() * 0.006 + i);
+        for (const w of wingSet) w.pose(flap, 0);
       };
       this.list.push(c);
     }

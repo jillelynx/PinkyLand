@@ -6,6 +6,7 @@ import { Input } from './core/input.js';
 import { AudioEngine } from './core/audio.js';
 import { UI } from './ui/ui.js';
 import { Intro } from './scenes/intro.js';
+import { HomeLevel } from './scenes/home.js';
 import { EarthLevel } from './scenes/earth.js';
 import { PinkyLandLevel } from './scenes/pinkyland.js';
 import { Kid } from './characters/kid.js';
@@ -15,7 +16,7 @@ import { Follower } from './characters/npc.js';
 import { createCape } from './world/props.js';
 import { loadModels } from './world/creatures.js';
 import css from './ui/ui.css';
-import { Storybook, storybookHasSave } from './storybook/storybook.js';
+import { Storybook, storybookHasSave, LEVELS } from './storybook/storybook.js';
 
 const SAVE_KEY = 'pinky-land-save-v1';
 const ALL_AVATARS = ['jacintaPack', 'jacinta', 'pinky', 'liev'];
@@ -83,7 +84,7 @@ export class Game {
     if (jump) {
       this.audio.start();
       if (jump === 'intro') return this.playIntro();
-      if (jump === 'storybook') return this.startStorybook(!this.params.get('fresh'));
+      if (jump === 'storybook') return this.startStorybook(!this.params.get('fresh'), +(this.params.get('chapter') || 1) - 1);
       if (jump === 'earth') this.state.chapter = 'earth';
       if (jump === 'pinky') { this.state.chapter = 'pinky'; if (this.params.get('arrived')) { this.state.pinky = { arrived: true, met: [], cape: !!this.params.get('cape'), tent: false }; } }
       if (this.params.get('time')) this.state.time = parseFloat(this.params.get('time'));
@@ -144,6 +145,7 @@ export class Game {
             <p>A 2.5D platformer: help Pinky find the girl who imagined him</p>
             ${storybookHasSave() ? '<button class="big-btn" data-go="sb-continue">Continue</button>' : ''}
             <button class="big-btn ${storybookHasSave() ? 'alt' : ''}" data-go="sb-new">${storybookHasSave() ? 'Start Chapter 1 Again' : 'Open the Storybook'}</button>
+            <button class="big-btn alt" data-go="sb-ch2">Chapter 2: The Big House ✨</button>
           </div>
         </div>
         <div class="title-note">Best with headphones 🎧 · Use the mouse and keyboard (or a game controller)</div>
@@ -153,6 +155,7 @@ export class Game {
       this.audio.start();
       this.audio.click();
       t.remove();
+      if (b.dataset.go === 'sb-ch2') { this.startStorybook(false, 1); return; }
       if (b.dataset.go.startsWith('sb-')) { this.startStorybook(b.dataset.go === 'sb-continue'); return; }
       if (b.dataset.go === 'new') {
         this.state = freshState();
@@ -163,11 +166,16 @@ export class Game {
   }
 
   // ---------------- Pinky's Storybook (2.5D platformer) ----------------
-  startStorybook(resume = true) {
+  startStorybook(resume = true, chapter = 0) {
     this.mode = 'storybook';
     this.ui.showHUD(false);
     this.storybook = new Storybook(this);
-    this.storybook.start(0, resume);
+    // continue where you left off (the chapter of your last checkpoint)
+    const sv = this.storybook.save;
+    let idx = chapter;
+    if (resume && sv.cp) idx = Math.max(0, LEVELS.findIndex((l) => l.id === sv.cp.level));
+    else if (resume && sv.done && sv.done[1] && !sv.done[2]) idx = 1;
+    this.storybook.start(idx, resume);
   }
 
   playIntro() {
@@ -197,7 +205,7 @@ export class Game {
       this.followerCache.clear();
     }
     this.state.chapter = name;
-    const level = name === 'pinky' ? new PinkyLandLevel(this) : new EarthLevel(this);
+    const level = name === 'pinky' ? new PinkyLandLevel(this) : name === 'home' ? new HomeLevel(this) : new EarthLevel(this);
     await level.build();
     this.level = level;
     this.engine.setScene(level.scene);
@@ -216,6 +224,18 @@ export class Game {
     if (name === 'pinky') level.arrive();
   }
 
+  // Jacinta's house: go in through the front door, come back out onto the walk
+  async enterHome() {
+    if (this.level?.mangoState === 'carried') { this.ui.say('Let’s take Mango home to Mrs. Rosa first!', 4); return; }
+    this.audio.page?.();
+    await this.loadLevel('home');
+  }
+
+  async leaveHome() {
+    this.audio.page?.();
+    await this.loadLevel('earth');
+  }
+
   async goToPinkyLand() {
     this.audio.portal();
     this.ui.say('Hold on tight, Jacinta! Here we gooo!', 3);
@@ -230,7 +250,7 @@ export class Game {
     if (!L) return;
     const M = this.avatarModels;
     const key = this.state.avatar;
-    const earth = L.name === 'earth';
+    const earth = L.name === 'earth' || L.name === 'home';
     const lievJoined = !earth || this.state.earth?.liev;
     const prevPos = L.player.pos.clone();
     L.player.setAvatar(key);
@@ -266,10 +286,10 @@ export class Game {
     const L = this.level;
     if (!L || this.ui.dialogueActive || L.cutscene || L.sitting) return;
     const avail = L.availableAvatars();
-    const lievJoined = L.name !== 'earth' || this.state.earth?.liev;
+    const lievJoined = (L.name !== 'earth' && L.name !== 'home') || this.state.earth?.liev;
     if (!avail.includes(key) || (key === 'liev' && !lievJoined)) {
-      if (key === 'pinky' && L.name === 'earth') this.ui.say('On Earth I’m just a regular pillow… but in Pinky Land I can walk on my own!', 5);
-      else if (key === 'jacinta' && L.name === 'earth') this.ui.say('I’d rather stay in your backpack here on Earth. Hugs!', 4);
+      if (key === 'pinky' && L.name !== 'pinky') this.ui.say('On Earth I’m just a regular pillow… but in Pinky Land I can walk on my own!', 5);
+      else if (key === 'jacinta' && L.name !== 'pinky') this.ui.say('I’d rather stay in your backpack here on Earth. Hugs!', 4);
       else if (key === 'liev') this.ui.say('Let’s find Liev first! He’s by the park entrance.', 4);
       return;
     }
@@ -291,7 +311,7 @@ export class Game {
 
   cycleAvatar() {
     const L = this.level;
-    const lievJoined = L.name !== 'earth' || this.state.earth?.liev;
+    const lievJoined = (L.name !== 'earth' && L.name !== 'home') || this.state.earth?.liev;
     const avail = L.availableAvatars().filter((k) => k !== 'liev' || lievJoined);
     if (avail.length < 2) { this.switchAvatar('liev'); return; }
     const i = avail.indexOf(this.state.avatar);
@@ -308,9 +328,9 @@ export class Game {
     if (this.ui.dialogueActive) return;
     if (act === 'hint') return this.showHint();
     if (act === 'journal') return this.ui.openJournal(this.state);
-    if (act === 'map') return this.ui.openMap((c) => L.drawMap(c), L.name === 'earth' ? '🏠 Houses · 🛝 Playground · 🌀 Magic door · ⛑️ Park helper · 🗑️ Trash bin' : '🌀 Dream Door · 🔥 Camp · 💧 Pond · 🌈 Falls · ☁️ Cloud steps · 🪸 Reef · 🩷 Pinky friends');
+    if (act === 'map') return this.ui.openMap((c) => L.drawMap(c), L.name === 'home' ? '🛋️ Living room · 🍳 Kitchen · 🛏️ Jacinta’s room · 🛁 Bathroom · 🚪 Front door' : L.name === 'earth' ? '🏠 Houses · 🛝 Playground · 🌀 Magic door · ⛑️ Park helper · 🗑️ Trash bin' : '🌀 Dream Door · 🔥 Camp · 💧 Pond · 🌈 Falls · ☁️ Cloud steps · 🪸 Reef · 🩷 Pinky friends');
     if (act === 'chars') {
-      const lievJoined = L.name !== 'earth' || this.state.earth?.liev;
+      const lievJoined = (L.name !== 'earth' && L.name !== 'home') || this.state.earth?.liev;
       return this.ui.openCharacters(L.availableAvatars().filter((k) => k !== 'liev' || lievJoined), this.state.avatar, ALL_AVATARS);
     }
     if (act === 'settings') return this.ui.openSettings(this.settings);
@@ -409,7 +429,7 @@ export class Game {
     if (hit('KeyM', 'Pad_map')) this.uiAction('map');
     if (this.ui.open) return;
     if (hit('Tab', 'Pad_switch')) this.cycleAvatar();
-    const lievJoined = this.level.name !== 'earth' || this.state.earth?.liev;
+    const lievJoined = (this.level.name !== 'earth' && this.level.name !== 'home') || this.state.earth?.liev;
     const avail = this.level.availableAvatars().filter((k) => k !== 'liev' || lievJoined);
     ['Digit1', 'Digit2', 'Digit3', 'Digit4'].forEach((d, i) => { if (hit(d) && avail[i]) this.switchAvatar(avail[i]); });
   }
@@ -422,7 +442,7 @@ export class Game {
       this.input.poll();
       if (this.intro) this.intro.update(dt);
       if (this.storybook && this.mode === 'storybook') this.storybook.update(dt);
-      if (this.level && (this.mode === 'earth' || this.mode === 'pinky')) {
+      if (this.level && (this.mode === 'earth' || this.mode === 'pinky' || this.mode === 'home')) {
         this.handleKeys();
         this.level.update(dt);
         if (!this.params.get('norender')) this.engine.render();

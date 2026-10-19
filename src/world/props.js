@@ -268,11 +268,30 @@ export function createCollectible(kind) {
     g.center();
     m = new THREE.Mesh(g, mat);
   } else if (kind === 'litter') {
+    // big, bright pieces so they're easy to spot in the grass
     const r = Math.random();
-    if (r < 0.33) m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.14, 12), std('#e04a4a', { metalness: 0.6, roughness: 0.3 }));
-    else if (r < 0.66) { m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), std('#f2f2f2', { flatShading: true })); }
-    else m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.12), std('#d9b38c'));
-    m.rotation.z = Math.PI / 2;
+    if (r < 0.33) {
+      m = new THREE.Group();
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.32, 16), std('#e8343c', { metalness: 0.5, roughness: 0.3 }));
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.112, 0.112, 0.08, 16), std('#ffffff', { roughness: 0.4 }));
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 16), std('#cfd3d8', { metalness: 0.8, roughness: 0.25 }));
+      rim.position.y = 0.165;
+      m.add(can, band, rim);
+      m.rotation.z = Math.PI / 2;
+    } else if (r < 0.66) {
+      m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 1), std('#ffffff', { flatShading: true, roughness: 0.9 }));
+      m.scale.set(1, 0.8, 0.9);
+    } else {
+      m = new THREE.Group();
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.12), std('#f2b233'));
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.345, 0.07, 0.125), std('#2f7de1'));
+      top.position.y = 0.09;
+      const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), std('#ff5fa2'));
+      straw.position.set(0.1, 0.18, 0); straw.rotation.z = -0.3;
+      m.add(box, top, straw);
+      m.rotation.z = Math.PI / 2 - 0.25;
+    }
+    m.position.y = 0.1;
   } else if (kind === 'cape') {
     m = createCape(info.color, 0.9);
     m.rotation.x = 0.2;
@@ -285,7 +304,13 @@ export function createCollectible(kind) {
   m.traverse?.((o) => { if (o.isMesh) o.castShadow = true; });
   group.add(m);
   // soft sparkle halo
-  if (kind !== 'litter') {
+  if (kind === 'litter') {
+    // a gentle white glint so litter catches your eye
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35 }));
+    halo.scale.setScalar(0.9);
+    halo.position.y = 0.15;
+    group.add(halo);
+  } else {
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: info.emissive, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }));
     halo.scale.setScalar(1.0);
     group.add(halo);

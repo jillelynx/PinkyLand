@@ -113,7 +113,7 @@ export class UI {
   showHUD(on) { this.hud.classList.toggle('hidden', !on); }
 
   setMode(mode) {
-    this.heartsPill.classList.toggle('hidden', mode !== 'earth');
+    this.heartsPill.classList.toggle('hidden', mode !== 'earth' && mode !== 'home');
     this.counterPill.classList.toggle('hidden', mode !== 'pinky');
   }
 
@@ -348,6 +348,9 @@ export class UI {
     this._openPanel('map', `<h2>Map</h2><div class="map-wrap"><canvas class="map-canvas" width="900" height="600"></canvas></div><div class="legend">${legend}</div>`);
     const c = this.panel.querySelector('canvas');
     drawMap(c);
+    // keep the little pulsing markers moving while the map is open
+    clearInterval(this._mapTimer);
+    this._mapTimer = setInterval(() => { if (!c.isConnected) { clearInterval(this._mapTimer); return; } drawMap(c); }, 120);
   }
 
   openCharacters(available, current, all) {

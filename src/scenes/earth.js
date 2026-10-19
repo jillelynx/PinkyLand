@@ -16,6 +16,8 @@ import { makeNoise2D, makeRandom, smoothstep } from '../util/noise.js';
 
 const ROAD_Z = -44; // the street runs BEHIND the houses, so Jacinta never has to cross it
 const WALK_Z = -20.4; // the sidewalk in front of the houses, along the park
+const MANGO_X = -25.5, MANGO_Z = 11; // the hurt parrot's stump, out in the open where it's easy to see
+const LITTER_SPOTS = [[-4, 8], [16, 6], [-20, 22], [8, 32], [22, 22], [-26, 4], [3, -2], [-14, 30]]; // litter in the park
 const PINKY = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
 const J = { who: 'Jacinta', color: '#ff6fa8', pitch: 1.2 };
 const L = { who: 'Liev', color: '#2f7de1', pitch: 0.95 };
@@ -105,6 +107,8 @@ export class EarthLevel extends Level {
       walk.receiveShadow = true;
       this.scene.add(walk);
       if (h.label) this.landmarks.push({ x: h.x, z: -30, icon: '🏠', label: h.label, always: true });
+      this.mapFeatures = this.mapFeatures || [];
+      this.mapFeatures.push({ type: 'house', x: h.x, z: -30, roof: h.roof });
       // white picket fence in front yard
       for (const s of [-1, 1]) {
         const f = createFence(4);
@@ -120,8 +124,10 @@ export class EarthLevel extends Level {
     this.swingSeats = pg.children[0].userData.seats;
     this.world.addColliders([{ type: 'box', x: -18, z: 10, hw: 1.8, hd: 0.7, top: 2.6, bottom: -1 }, { type: 'box', x: -13.5, z: 9.6, hw: 0.5, hd: 1.6, top: 2.0, bottom: -1 }]);
     this.landmarks.push({ x: -16, z: 10, icon: '🛝', label: 'Playground' });
+    this.mapFeatures.push({ type: 'playground', x: -16, z: 10 }, { type: 'label', x: 0, z: -40, text: 'Maple Street', color: 'rgba(80,70,90,0.8)' });
     const benchSpots = [[12, 14, -Math.PI / 2 - 0.3], [18, 26, -Math.PI / 2 - 0.8], [-6, 2, 0.3]];
     for (const [x, z, r] of benchSpots) {
+      this.mapFeatures.push({ type: 'bench', x, z });
       const b = createBench();
       b.position.set(x, this.terrain.getHeight(x, z), z);
       b.rotation.y = r;
@@ -168,6 +174,10 @@ export class EarthLevel extends Level {
       { x: -8, z: -31.5, kind: 'tall', color: '#6fbf5f', scale: 1.0 }, { x: 8.2, z: -31.8, kind: 'round', color: '#7cc96b', scale: 1.15 },
       { x: -4.5, z: -33.5, kind: 'round', color: '#fbd3ff', scale: 0.8 }, { x: 4.6, z: -33.6, kind: 'tall', color: '#8fd47a', scale: 0.85 },
     );
+    this.mapTitle = 'Sunny Hill Park';
+    this.mapHasWater = false;
+    this.mapFeatures = this.mapFeatures || [];
+    for (const t of [...treeSpots, { x: 0, z: 46, color: '#ff9ec6', scale: 2.2 }]) this.mapFeatures.push({ type: 'tree', x: t.x, z: t.z, color: t.color, r: 2.0 * (t.scale || 1) });
     const trees = createTrees(this.terrain, treeSpots, { seed: 3 });
     this.scene.add(trees.group);
     this.world.addColliders(trees.colliders);
@@ -178,14 +188,14 @@ export class EarthLevel extends Level {
     this.scene.add(createBushes(this.terrain, Array.from({ length: 30 }, (_, i) => {
       const a = (i / 30) * Math.PI * 2;
       return { x: Math.cos(a) * 30, z: 14 + Math.sin(a) * 26, color: i % 4 ? '#5fae55' : '#7fc06a' };
-    }).filter((b) => b.z > -6 && Math.hypot(b.x + 29.2, b.z - 7.6) > 3.5)));
+    }).filter((b) => b.z > -6 && Math.hypot(b.x - MANGO_X, b.z - MANGO_Z) > 3.5)));
     const rocks = createRocks(this.terrain, [{ x: -8, z: 30 }, { x: 14, z: 36, scale: 1.5 }, { x: -34, z: 20 }, { x: 32, z: 30, scale: 1.2 }]);
     this.scene.add(rocks.group);
     this.world.addColliders(rocks.colliders);
 
     // grass & flowers
     const q = g.engine.q;
-    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 || Math.hypot(x + 29.2, z - 7.6) < 1.6 ? 0 : 1);
+    const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 || Math.hypot(x - MANGO_X, z - MANGO_Z) < 1.6 || LITTER_SPOTS.some(([lx, lz]) => Math.hypot(x - lx, z - lz) < 0.9) ? 0 : 1);
     this.scene.add(createGrass(this.terrain, { count: Math.floor(140000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.18, 0.4], width: [0.4, 0.6] }));
     this.scene.add(createFlowers(this.terrain, {
       count: Math.floor(3000 * q.grass), area: 120, center: [0, 14],
@@ -283,12 +293,12 @@ export class EarthLevel extends Level {
     this.scene.add(this.mango);
     // a little tree stump for Mango to rest on, so he's easy to spot above the grass
     const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.44, 12), new THREE.MeshStandardMaterial({ color: '#8a5a3c', roughness: 1 }));
-    stump.position.set(-29.2, this.terrain.getHeight(-29.2, 7.6) + 0.22, 7.6);
+    stump.position.set(MANGO_X, this.terrain.getHeight(MANGO_X, MANGO_Z) + 0.22, MANGO_Z);
     stump.castShadow = stump.receiveShadow = true;
     this.scene.add(stump);
     const rings = new THREE.Mesh(new THREE.CircleGeometry(0.29, 16), new THREE.MeshStandardMaterial({ color: '#d9b38c' }));
     rings.rotation.x = -Math.PI / 2;
-    rings.position.set(-29.2, this.terrain.getHeight(-29.2, 7.6) + 0.445, 7.6);
+    rings.position.set(MANGO_X, this.terrain.getHeight(MANGO_X, MANGO_Z) + 0.445, MANGO_Z);
     this.scene.add(rings);
     this.mangoT = 0;
     this.updaters.push((dt) => this.updateMango(dt));
@@ -412,7 +422,7 @@ export class EarthLevel extends Level {
     this.mangoMixer?.update(this.mangoState === 'hurt' ? 0 : dt);
     this.mangoT += dt;
     if (this.mangoState === 'hurt') {
-      const x = -29.2, z = 7.6;
+      const x = MANGO_X, z = MANGO_Z;
       this.mango.position.set(x, this.terrain.getHeight(x, z) + 0.46 + Math.abs(Math.sin(this.mangoT * 1.5)) * 0.02, z);
       // chirp now and then so Jacinta can find him by listening
       this._chirpT = (this._chirpT ?? 2) - dt;
@@ -654,19 +664,15 @@ export class EarthLevel extends Level {
       },
     });
 
-    // At night, Jacinta can go inside and sleep until morning
+    // Jacinta's front door: go inside to explore the house (and sleep in her own bed)
     this.addInteractable({
       pos: new THREE.Vector3(0, 0.3, -27.0), radius: 2.0,
-      enabled: () => this.dayNight.nightAmount > 0.35,
-      label: 'Go inside and sleep until morning 🌙',
-      action: async () => {
-        await g.ui.dialogue([line(J, 'Time for bed, Pinky. Tomorrow we’ll spread more kindness!'), line(PINKY, 'Goodnight, Jacinta. Sweet dreams! 💗')]);
-        g.skipToMorning();
-      },
+      label: () => (this.dayNight.nightAmount > 0.35 ? 'Go inside (bedtime!) 🏠' : 'Go inside your house 🏠'),
+      action: () => g.enterHome(),
     });
 
     // Litter pickup
-    const litterSpots = [[-4, 8], [16, 6], [-20, 22], [8, 32], [22, 22], [-26, 4], [3, -2], [-14, 30]];
+    const litterSpots = LITTER_SPOTS;
     this.litterTotal = litterSpots.length;
     g.state.totals.litter = this.litterTotal;
     litterSpots.forEach(([x, z], i) => {

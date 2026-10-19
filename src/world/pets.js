@@ -8,13 +8,14 @@ import { angleDamp, damp, makeRandom } from '../util/noise.js';
 
 // ---------------------------------------------------------------- fur
 const furCache = new Map();
-function furMaterial({ color, belly = null, bellyMode = 0, density = 90, length = 0.02, layers = 12, droop = 0.5, key = '' }) {
-  const id = [color, belly, bellyMode, density, length, layers, droop, key].join('|');
+function furMaterial({ color, belly = null, bellyMode = 0, density = 90, length = 0.02, layers = 12, droop = 0.5, key = '', back = null }) {
+  const id = [color, belly, bellyMode, density, length, layers, droop, key, back].join('|');
   if (furCache.has(id)) return furCache.get(id);
   const m = new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0 });
   const uniforms = {
     uFurLen: { value: length }, uDensity: { value: density }, uDroop: { value: droop },
     uBelly: { value: new THREE.Color(belly || color) }, uBellyMode: { value: bellyMode },
+    uBack: { value: new THREE.Color(back || color) }, uBackK: { value: back ? 1 : 0 },
   };
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -31,7 +32,7 @@ function furMaterial({ color, belly = null, bellyMode = 0, density = 90, length 
         transformed.y -= layer * layer * uFurLen * uDroop;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform vec3 uBelly; uniform float uBellyMode;
+        uniform vec3 uBelly; uniform float uBellyMode; uniform vec3 uBack; uniform float uBackK;
         varying float vLayer; varying vec3 vFurPos; varying vec3 vObjN;
         float furHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
@@ -45,6 +46,7 @@ function furMaterial({ color, belly = null, bellyMode = 0, density = 90, length 
           if (uBellyMode > 0.5) bellyK = smoothstep(-0.05, -0.45, vObjN.y);
           if (uBellyMode > 1.5) bellyK = max(bellyK, smoothstep(0.45, 0.8, vObjN.z) * smoothstep(0.2, -0.2, vObjN.y));
           diffuseColor.rgb = mix(diffuseColor.rgb, uBelly, bellyK);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uBack, uBackK * smoothstep(0.15, 0.7, vObjN.y) * (0.8 + 0.2 * h));
           diffuseColor.rgb *= mix(0.55, 1.08, vLayer);
         }`);
   };
@@ -97,11 +99,12 @@ function eye(r) {
 
 // ---------------------------------------------------------------- looks
 export const PET_LOOKS = {
-  buddy: { // short-legged dog (corgi-like)
-    name: 'Buddy', kind: 'dog', len: 0.5, r: 0.13, legLen: 0.08, legR: 0.035, headR: 0.1, snout: 0.08,
-    ears: 'pointy', earSize: 0.06, tail: { len: 0.12, r: 0.035, segs: 3, up: 0.6 },
-    color: '#d98a3c', belly: '#fff5ea', bellyMode: 2, paws: '#fff5ea', nose: '#2a1a14', innerEar: '#f2b9a0',
-    fur: { length: 0.018, layers: 12, density: 160 }, speed: 1.1,
+  buddy: { // brown terrier mix, modelled on Buddy's photo: tan-brown with a darker back, long curled tail
+    name: 'Buddy', kind: 'dog', len: 0.48, r: 0.105, legLen: 0.17, legR: 0.03, headR: 0.092, snout: 0.11,
+    ears: 'folded', earSize: 0.07, tail: { len: 0.32, r: 0.028, segs: 7, up: 1.15, curl: 0.32 },
+    color: '#a86d3c', belly: '#c08b58', bellyMode: 1, back: '#2e2119', paws: '#a46a3a', nose: '#1a1210', innerEar: '#c98a64',
+    muzzle: '#b97c46', tailColor: '#8a5530', collar: '#1d1b22',
+    fur: { length: 0.012, layers: 10, density: 200 }, speed: 1.2,
   },
   gil: { // black short-haired cat
     name: 'Gil', kind: 'cat', len: 0.36, r: 0.085, legLen: 0.13, legR: 0.024, headR: 0.075, snout: 0.03,
@@ -154,7 +157,7 @@ export class Pet {
     this.body.position.y = hipY;
     this.root.add(this.body);
     // torso
-    const torso = furry(ellipsoid(L.r, L.r * 0.92, L.len / 2), fur);
+    const torso = furry(ellipsoid(L.r, L.r * 0.92, L.len / 2), L.back ? { ...fur, back: L.back } : fur);
     this.body.add(torso);
     this.torso = torso;
     // chest/haunch bulges for a natural silhouette
@@ -175,7 +178,7 @@ export class Pet {
     const skull = furry(ellipsoid(L.headR, L.headR * 0.92, L.headR * 1.05), { ...fur, bellyMode: L.kind === 'dog' ? 0 : fur.bellyMode });
     this.head.add(skull);
     // muzzle / snout
-    const snoutColor = L.kind === 'dog' ? L.belly : L.color;
+    const snoutColor = L.kind === 'dog' ? (L.muzzle || L.belly) : L.color;
     const snout = furry(ellipsoid(L.headR * 0.55, L.headR * 0.45, L.snout * 0.7 + L.headR * 0.3), { ...fur, color: snoutColor, bellyMode: 0, key: L.name + 'snout' });
     snout.position.set(0, -L.headR * 0.22, L.headR * 0.75);
     this.head.add(snout);
@@ -211,6 +214,15 @@ export class Pet {
         const inner = new THREE.Mesh(new THREE.ConeGeometry(sz * 0.45, sz * 1.1, 8).translate(0, sz * 0.6, 0).scale(1, 1, 0.3), solid(L.innerEar, { roughness: 0.8 }));
         inner.position.z = sz * 0.06;
         ear.add(inner);
+        if (L.ears === 'folded') {
+          // terrier ears: stand up, then the tips flop forward
+          outer.scale.set(1, 0.6, 1);
+          inner.scale.set(1, 0.6, 1);
+          const tip = furry(new THREE.ConeGeometry(sz * 0.5, sz * 0.9, 10).translate(0, sz * 0.45, 0).scale(1, 1, 0.4), { ...fur, color: L.color, bellyMode: 0, key: L.name + 'eartip' });
+          tip.position.y = sz * 0.9;
+          tip.rotation.x = -2.0;
+          ear.add(tip);
+        }
         if (L.ears === 'tuft') {
           const tuft = new THREE.Mesh(new THREE.ConeGeometry(sz * 0.2, sz * 0.8, 6), solid(L.color));
           tuft.position.y = sz * 1.9;
@@ -223,6 +235,17 @@ export class Pet {
       ear.rotation.x = -0.15;
       this.head.add(ear);
       this.ears.push(ear);
+    }
+    // a collar (Buddy wears a black one with a silver buckle)
+    if (L.collar) {
+      const c = new THREE.Mesh(new THREE.TorusGeometry(L.r * 0.78, 0.016, 8, 24), solid(L.collar, { roughness: 0.5 }));
+      c.rotation.x = Math.PI / 2 - 0.5;
+      c.position.set(0, L.headR * 0.05, -L.headR * 0.15);
+      this.neck.add(c);
+      const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.025, 0.012), new THREE.MeshStandardMaterial({ color: '#cfd3d8', metalness: 0.9, roughness: 0.25 }));
+      buckle.position.set(0, -L.r * 0.5, L.r * 0.32);
+      buckle.rotation.x = -0.5;
+      this.neck.add(buckle);
     }
     // whiskers
     if (L.whiskers) {
@@ -256,7 +279,7 @@ export class Pet {
     const T = L.tail;
     let parent = this.body;
     const segLen = T.len / T.segs;
-    const tailFur = T.bushy ? { ...fur, length: 0.045, layers: 16, density: 140, droop: 0.2, bellyMode: 0, key: L.name + 'tail' } : { ...fur, bellyMode: 0, key: L.name + 'tail' };
+    const tailFur = T.bushy ? { ...fur, length: 0.045, layers: 16, density: 140, droop: 0.2, bellyMode: 0, key: L.name + 'tail' } : { ...fur, color: L.tailColor || L.color, back: L.back || null, bellyMode: 0, key: L.name + 'tail' };
     for (let i = 0; i < T.segs; i++) {
       const seg = new THREE.Group();
       seg.position.set(0, i === 0 ? L.r * 0.3 : 0, i === 0 ? -L.len * 0.48 : -segLen);
@@ -412,7 +435,7 @@ export class Pet {
     this.tail.forEach((seg, i) => {
       let yaw, pitch;
       // (positive pitch lifts the tail up; negative lets it hang down)
-      if (L.kind === 'dog') { yaw = Math.sin(this.t * 14) * 0.6 * P.wag; pitch = i === 0 ? T.up : -0.1; }
+      if (L.kind === 'dog') { yaw = Math.sin(this.t * 14 - i * 0.4) * (i === 0 ? 0.6 : 0.12) * P.wag; pitch = i === 0 ? T.up : (T.curl ?? -0.1); }
       else if (L.kind === 'cat') { yaw = Math.sin(this.t * 1.6 - i * 0.6) * 0.25; pitch = i === 0 ? T.up * (1 - P.sit * 0.8) : i < 3 ? 0.05 : -0.22; }
       else if (L.kind === 'squirrel') { yaw = Math.sin(this.t * 3 - i * 0.5) * 0.12; pitch = i === 0 ? 1.35 : i < this.tail.length - 1 ? 0.32 : -0.5; }
       else { yaw = Math.sin(this.t * 2.5 - i * 0.8) * 0.3; pitch = i === 0 ? -0.25 : -0.06; }

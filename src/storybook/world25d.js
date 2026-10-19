@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { rng, crayonPattern, paperCanvas } from './paint.js';
 import { renderIntroCharacters } from '../scenes/intro.js';
+import { houseGround, houseBlock, houseOneway, houseMover, houseBouncy, houseHazard, makeSnail } from './world25dHouse.js';
 
 export const S = 1 / 58; // 58 game pixels = 1 meter
 export const GROUND_Y = 440;
@@ -81,6 +82,7 @@ function shadowed(m) { m.castShadow = true; m.receiveShadow = true; return m; }
 
 // ---------------- Ground strips ----------------
 export function makeGround(seg, bottomY = 760) {
+  if (seg.kind === 'floor' || seg.kind === 'tile') return houseGround(seg, bottomY);
   const w = (seg.x1 - seg.x0) * S;
   const h = (bottomY - seg.y) * S;
   const geo = new THREE.BoxGeometry(w, h, DEPTH, Math.max(1, Math.round(w)), 1, 1);
@@ -108,6 +110,7 @@ export function makeGround(seg, bottomY = 760) {
 
 // ---------------- Blocks (giant everyday objects) ----------------
 export function makeBlock(b) {
+  const hb = houseBlock(b); if (hb) return hb;
   const w = b.w * S, h = b.h * S;
   const cx = toX(b.x + b.w / 2), cy = toY(b.y + b.h / 2);
   const g = new THREE.Group();
@@ -174,6 +177,7 @@ export function makeBlock(b) {
 
 // ---------------- One-way platforms ----------------
 export function makeOneway(o) {
+  const ho = houseOneway(o); if (ho) return ho;
   const w = o.w * S;
   const g = new THREE.Group();
   g.position.set(toX(o.x + o.w / 2), toY(o.y), 0);
@@ -216,6 +220,7 @@ export function makeOneway(o) {
 
 // ---------------- Moving platforms ----------------
 export function makeMover(m) {
+  const hm = houseMover(m); if (hm) return hm;
   const w = m.w * S;
   const g = new THREE.Group();
   if (m.kind === 'boat') {
@@ -244,6 +249,7 @@ export function makeMover(m) {
 }
 
 export function makeBouncy(b) {
+  const hbo = houseBouncy(b); if (hbo) return hbo;
   const w = b.w * S;
   const g = new THREE.Group();
   g.position.set(toX(b.x + b.w / 2), toY(b.y), 0);
@@ -278,6 +284,7 @@ export function makeWater(wt) {
 }
 
 export function makeThorns(hz) {
+  const hh = houseHazard(hz); if (hh) return hh;
   const g = new THREE.Group();
   g.position.set(toX(hz.x + hz.w / 2), toY(hz.y + hz.h), 0);
   const w = hz.w * S;
@@ -298,7 +305,8 @@ export function makeThorns(hz) {
 }
 
 // A fluffy dust bunny
-export function makeBunny() {
+export function makeBunny(kind) {
+  if (kind === 'snail') return makeSnail();
   const g = new THREE.Group();
   const geo = new THREE.IcosahedronGeometry(0.34, 3);
   const p = geo.attributes.position;
