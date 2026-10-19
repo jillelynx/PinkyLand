@@ -48,6 +48,12 @@ export class Level {
     this.player.events.jump = (n) => g.audio.jump(n);
     this.player.events.bounce = () => g.audio.bounce();
     this.player.events.splash = (k) => g.audio.splash(k);
+    this._edgeT = -99;
+    this.player.events.edge = () => {
+      const now = performance.now() / 1000;
+      if (now - this._edgeT > 10) g.ui.toast(this.name === 'pinky' ? '🌊' : '🏡', this.name === 'pinky' ? 'The waves gently carry you back toward Pinky Land.' : 'That’s far enough — let’s stay near the park.');
+      this._edgeT = now;
+    };
     this.buildFlashlight();
   }
 
@@ -131,6 +137,15 @@ export class Level {
   addNPC(npc) {
     this.npcs.push(npc);
     this.scene.add(npc.root);
+    // give every character a soft, solid body so you can't walk through them
+    npc.root.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(npc.root).getSize(new THREE.Vector3());
+    npc.body = this.world.addBody({
+      pos: npc.root.position,
+      r: THREE.MathUtils.clamp(Math.max(size.x, size.z) * 0.4, 0.22, 1.6),
+      h: Math.max(0.5, size.y),
+      active: () => !npc.noCollide && npc.root.visible && !!npc.root.parent && this.npcs.includes(npc),
+    });
     return npc;
   }
 

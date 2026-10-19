@@ -464,8 +464,11 @@ function bird(color, breast) {
 }
 
 export class Songbirds {
-  constructor(scene, world, { center, count = 5 }) {
+  // perches: places a small bird can be seen when it lands, instead of
+  // vanishing into tall grass — { x, z, y, hw, hd } (hw/hd = room to hop)
+  constructor(scene, world, { center, count = 5, perches = null }) {
     this.world = world;
+    this.perches = perches;
     this.birds = [];
     const colors = [['#5a7ab8', '#f2d0a0'], ['#c0392b', '#f0b090'], ['#8a6a4a', '#e8d8c0'], ['#e8c43a', '#fff0b0'], ['#6a8a5a', '#d8e0c0']];
     const rand = makeRandom(99);
@@ -483,7 +486,28 @@ export class Songbirds {
     this.rand = rand;
   }
 
+  _pickPerch(b) {
+    if (this.perches && this.perches.length) {
+      // a perch not too far from where it is flying
+      const p = b.m.position;
+      const near = this.perches.filter((q) => Math.hypot(q.x - p.x, q.z - p.z) < 16);
+      const list = near.length ? near : this.perches;
+      const q = list[Math.floor(this.rand() * list.length)];
+      b.perch = q;
+      b.gx = q.x + (this.rand() - 0.5) * 2 * q.hw;
+      b.gz = q.z + (this.rand() - 0.5) * 2 * q.hd;
+    } else {
+      b.perch = null;
+      b.gx = b.center.x + (this.rand() - 0.5) * 10; b.gz = b.center.z + (this.rand() - 0.5) * 6;
+    }
+  }
+
   update(dt, playerPos) {
+    if (!this._placed) {
+      // birds that start on the ground start on a perch
+      this._placed = true;
+      for (const b of this.birds) if (b.mode === 'ground') { this._pickPerch(b); b.m.position.set(b.gx, b.perch ? b.perch.y : this.world.groundHeight(b.gx, b.gz), b.gz); }
+    }
     for (const b of this.birds) {
       b.t += dt;
       b.modeT -= dt;
@@ -499,9 +523,9 @@ export class Songbirds {
         const flapping = Math.sin(b.t * 1.5) > -0.4;
         const f = flapping ? Math.sin(b.t * 38) * 1.0 : 0.15;
         wings.forEach((w) => { w.pivot.rotation.z = w.s * f; });
-        if (b.modeT < 0) { b.mode = 'landing'; b.modeT = 0; b.gx = b.center.x + (this.rand() - 0.5) * 10; b.gz = b.center.z + (this.rand() - 0.5) * 6; }
+        if (b.modeT < 0) { b.mode = 'landing'; b.modeT = 0; this._pickPerch(b); }
       } else if (b.mode === 'landing') {
-        const tx = b.gx, tz = b.gz, ty = this.world.groundHeight(tx, tz);
+        const tx = b.gx, tz = b.gz, ty = b.perch ? b.perch.y : this.world.groundHeight(tx, tz);
         const p = b.m.position;
         const d = Math.hypot(tx - p.x, tz - p.z, ty - p.y);
         if (d < 0.1) { b.mode = 'ground'; b.modeT = 4 + this.rand() * 6; }
@@ -516,12 +540,15 @@ export class Songbirds {
         const p = b.m.position;
         b.hopT -= dt;
         if (b.hopT < 0) { b.hopT = 0.4 + this.rand() * 1.2; b.yaw += (this.rand() - 0.5) * 2; b.hopping = 0.25; }
+        const pr = b.perch;
         if (b.hopping > 0) {
           b.hopping -= dt;
-          p.x += Math.sin(b.yaw) * dt * 0.5; p.z += Math.cos(b.yaw) * dt * 0.5;
+          if (!pr || pr.hw > 0) { p.x += Math.sin(b.yaw) * dt * 0.5; p.z += Math.cos(b.yaw) * dt * 0.5; }
+          // stay on the perch (sidewalk, path, fence post)
+          if (pr) { p.x = Math.min(pr.x + pr.hw, Math.max(pr.x - pr.hw, p.x)); p.z = Math.min(pr.z + pr.hd, Math.max(pr.z - pr.hd, p.z)); }
         }
         const peck = b.hopping > 0 ? 0 : Math.max(0, Math.sin(b.t * 9)) * 0.5;
-        p.y = this.world.groundHeight(p.x, p.z) + (b.hopping > 0 ? Math.sin((b.hopping / 0.25) * Math.PI) * 0.05 : 0);
+        p.y = (pr ? pr.y : this.world.groundHeight(p.x, p.z)) + (b.hopping > 0 ? Math.sin((b.hopping / 0.25) * Math.PI) * 0.05 : 0);
         b.m.rotation.set(peck, b.yaw, 0);
         wings.forEach((w) => { w.pivot.rotation.z = w.s * 0.1; });
         // fly away if Jacinta comes running close, or after a while

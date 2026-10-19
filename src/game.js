@@ -84,6 +84,7 @@ export class Game {
       this.audio.start();
       if (jump === 'intro') return this.playIntro();
       if (jump === 'storybook') return this.startStorybook(!this.params.get('fresh'));
+      if (jump === 'earth') this.state.chapter = 'earth';
       if (jump === 'pinky') { this.state.chapter = 'pinky'; if (this.params.get('arrived')) { this.state.pinky = { arrived: true, met: [], cape: !!this.params.get('cape'), tent: false }; } }
       if (this.params.get('time')) this.state.time = parseFloat(this.params.get('time'));
       if (this.params.get('avatar')) this.state.avatar = this.params.get('avatar');
@@ -190,6 +191,7 @@ export class Game {
     await new Promise((r) => setTimeout(r, this.level ? 1200 : 50));
     if (this.level) {
       this.state.time = this.level.dayNight.time;
+      if (this.forceTime !== undefined) { this.state.time = this.forceTime; this.forceTime = undefined; }
       this.level.dispose();
       for (const f of this.followerCache.values()) f.root.parent?.remove(f.root);
       this.followerCache.clear();
@@ -218,7 +220,7 @@ export class Game {
     this.audio.portal();
     this.ui.say('Hold on tight, Jacinta! Here we gooo!', 3);
     this.state.avatar = 'jacinta';
-    this.state.time = 0.33;
+    this.forceTime = 0.33; // Pinky Land always starts on a bright morning
     await this.loadLevel('pinky');
   }
 
@@ -362,6 +364,27 @@ export class Game {
   clearSave() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ settings: this.settings })); } catch (e) { /* ignore */ }
     this.savedRaw = null;
+  }
+
+  // Fast-forward to a sunny morning
+  async skipToMorning() {
+    const L = this.level;
+    if (!L) return;
+    this.ui.close();
+    this.ui.fade(true);
+    await new Promise((r) => setTimeout(r, 1300));
+    L.dayNight.setTime(0.27);
+    this.ui.fade(false);
+    this.ui.toast('🌅', 'Good morning!');
+    this.saveGame();
+  }
+
+  // Save everything and go back to the title screen (to pick the other game, for example)
+  toMainMenu() {
+    if (this.storybook) this.storybook.saveProgress();
+    else this.saveGame();
+    // reload the page without any test settings so the title screen appears
+    location.href = location.pathname;
   }
 
   newGame() {

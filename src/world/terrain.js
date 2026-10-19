@@ -15,12 +15,14 @@ export function addCaustics(material) {
     shader.uniforms.uTime = sharedUniforms.uTime;
     shader.uniforms.uWaterLevel = sharedUniforms.uWaterLevel;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed,1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; varying vec3 vWNrm;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed,1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        varying vec3 vWPos; uniform float uTime; uniform float uWaterLevel;
+        varying vec3 vWPos; varying vec3 vWNrm; uniform float uTime; uniform float uWaterLevel;
         float cHash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+        float tNoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
+          return mix(mix(cHash(i), cHash(i+vec2(1,0)), u.x), mix(cHash(i+vec2(0,1)), cHash(i+vec2(1,1)), u.x), u.y); }
         float caustic(vec2 p){
           float t = uTime*0.6;
           vec2 q = p;
@@ -32,6 +34,16 @@ export function addCaustics(material) {
           return pow(1.0 - c/3.0, 4.0);
         }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        // gentle mottling so big areas of ground don't look like flat paint
+        float m1 = tNoise(vWPos.xz*0.31), m2 = tNoise(vWPos.xz*1.3 + 7.0), m3 = tNoise(vWPos.xz*5.0);
+        diffuseColor.rgb *= 0.88 + 0.16*m1 + 0.08*m2 + 0.05*m3;
+        // steep ground becomes layered stone (cliffs, pond walls)
+        float steep = 1.0 - smoothstep(0.5, 0.78, vWNrm.y);
+        if (steep > 0.001 && vWPos.y > uWaterLevel - 1.0) {
+          float strata = sin(vWPos.y*3.4 + tNoise(vWPos.xz*0.5)*3.0) * 0.5 + 0.5;
+          vec3 rockC = mix(vec3(0.27, 0.24, 0.32), vec3(0.47, 0.41, 0.5), strata) * (0.82 + 0.3*m2 + 0.12*m3);
+          diffuseColor.rgb = mix(diffuseColor.rgb, rockC, steep * 0.9);
+        }
         float depthBelow = uWaterLevel - vWPos.y;
         if (depthBelow > 0.0) {
           float k = caustic(vWPos.xz*0.55) * 1.6 + caustic(vWPos.xz*1.1+3.0)*0.6;
@@ -40,7 +52,7 @@ export function addCaustics(material) {
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(0.75,0.95,1.0), smoothstep(0.0, 6.0, depthBelow));
         }`);
   };
-  material.customProgramCacheKey = () => 'caustics';
+  material.customProgramCacheKey = () => 'caustics2';
   return material;
 }
 

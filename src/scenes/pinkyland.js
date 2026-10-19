@@ -62,25 +62,36 @@ export class PinkyLandLevel extends Level {
     this.setupSky(g.state.time ?? 0.34);
 
     const sand = new THREE.Color('#f6e1c3'), wetSand = new THREE.Color('#d9c09a');
-    const grassA = new THREE.Color('#7fcf6a'), grassB = new THREE.Color('#a6df73'), meadowPink = new THREE.Color('#e9b8d8');
-    const rock = new THREE.Color('#b9a9c9'), under = new THREE.Color('#e8d7b0');
+    const grassA = new THREE.Color('#68b955'), grassB = new THREE.Color('#8cc962'), meadowPink = new THREE.Color('#e9b8d8');
+    const rock = new THREE.Color('#b9a9c9'), under = new THREE.Color('#e8d7b0'), mossy = new THREE.Color('#5f9a52');
+    const pondEarth = new THREE.Color('#8a9a6a'), pondFloor = new THREE.Color('#9fb7a0');
     const color = (x, z, h, out) => {
       const n1 = noise(x * 0.03 + 9, z * 0.03), n2 = noise(x * 0.11, z * 0.11);
       out.copy(grassA).lerp(grassB, n1 * 0.5 + 0.5);
       // dreamy pink flower meadows
-      if (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.35) out.lerp(meadowPink, 0.35 + n2 * 0.1);
-      if (h < 1.1) out.lerp(sand, smoothstep(1.1, 0.5, h));
-      if (h < 0.15) out.copy(wetSand).lerp(under, smoothstep(0, -2, h));
+      const pondD = Math.hypot(x - POND.x, z - POND.z);
+      if (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.35 && pondD > POND.r + 5) out.lerp(meadowPink, 0.16 + n2 * 0.06);
+      // a damp, mossy band around the pond instead of bright colour stripes
+      if (pondD < POND.r + 4 && h > 0.1) out.lerp(mossy, (1 - smoothstep(POND.r - 2, POND.r + 4, pondD)) * 0.6);
+      const pondBank = pondD < POND.r + 7;
+      if (pondBank) {
+        // the pond has damp earth and pebbles at the water line, not beach sand
+        if (h < 0.9) out.lerp(pondEarth, smoothstep(0.9, 0.2, h));
+        if (h < 0.15) out.copy(pondEarth).lerp(pondFloor, smoothstep(0.1, -1.5, h));
+      } else {
+        if (h < 1.1) out.lerp(sand, smoothstep(1.1, 0.5, h));
+        if (h < 0.15) out.copy(wetSand).lerp(under, smoothstep(0, -2, h));
+      }
       if (h < -2) out.copy(under).lerp(new THREE.Color('#bfe0d0'), smoothstep(-2, -8, h));
       // rocky cliff faces
       const e = 1.2;
       const slope = Math.abs(this.height(x + e, z) - this.height(x - e, z)) + Math.abs(this.height(x, z + e) - this.height(x, z - e));
-      if (slope > 2.2 && h > 0.5) out.lerp(rock, smoothstep(2.2, 4, slope));
+      if (slope > 2.2 && h > 0.5 && !(pondBank && z < POND.z + 11)) out.lerp(rock, smoothstep(2.2, 4, slope));
       if (h > 12) out.lerp(new THREE.Color('#d8f0b0'), 0.2);
     };
     this.terrain = new Terrain({ size: 400, segments: 260, height: (x, z) => this.height(x, z), color });
     this.scene.add(this.terrain.mesh);
-    this.world = new World({ terrain: this.terrain, waterLevel: 0, bounds: { x: 0, z: 0, r: R + 30 } });
+    this.world = new World({ terrain: this.terrain, waterLevel: 0, bounds: { x: 0, z: 0, r: R + 16, soft: R + 3 } });
     this.mapBounds = { x0: -150, x1: 150, z0: -150, z1: 150 };
 
     this.water = new Water({ size: 400, segments: 200, groundHeight: (x, z) => this.terrain.getHeight(x, z), skyUniforms: this.dayNight.uniforms });
@@ -94,7 +105,7 @@ export class PinkyLandLevel extends Level {
     const slopeAt = (x, z) => { const nn = this.terrain.getNormal(x, z); return 1 - nn.y; };
     const nearCamp = (x, z) => Math.hypot(x - CAMP.x, z - CAMP.z) < 4.5;
     this.scene.add(createGrass(this.terrain, {
-      count: Math.floor(200000 * q.grass), area: 250, center: [0, 0], height: [0.25, 0.7], width: [0.55, 0.85],
+      count: Math.floor(230000 * q.grass), area: 250, center: [0, 0], height: [0.22, 0.6], width: [0.4, 0.62],
       where: (x, z, h) => (h > 0.9 && slopeAt(x, z) < 0.35 && !nearCamp(x, z) ? 1 : 0),
       tint: (x, z, c, r) => { if (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.35) c.offsetHSL(-0.12 + r() * 0.02, -0.1, 0.05); },
     }));

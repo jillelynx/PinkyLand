@@ -39,6 +39,14 @@ export class Storybook {
   loadSave() {
     try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || { done: {}, best: {}, cp: null, scrapsEver: [] }; } catch (e) { return { done: {}, best: {}, cp: null, scrapsEver: [] }; }
   }
+  // keep what you've found so far (you'll restart from your last star checkpoint)
+  saveProgress() {
+    if (this.level && this.run && this.state !== 'ending') {
+      this.save.cp = { level: this.level.id, idx: this.run.cp, stars: [...this.run.stars], scraps: [...this.run.scraps], seen: [...this.run.seen] };
+    }
+    this.writeSave();
+  }
+
   writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.save)); } catch (e) { /* ignore */ } }
 
   // ---------------- UI ----------------
@@ -127,7 +135,7 @@ export class Storybook {
     this.p = { x: spawnX, y: L.start.y, vx: 0, vy: 0, facing: 1, grounded: true, coyote: 0, buffer: 0, inv: 0, standing: null, lastSafe: { x: spawnX, y: L.start.y } };
     this.camX = spawnX; this.camY = L.start.y - 120;
     this.time = 0;
-    this.state = this.run.cp < 0 ? 'birth' : 'play';
+    this.state = cp ? 'play' : 'birth'; // coming back to a saved game skips the opening
     this.stateT = 0;
     this.audio.state.scene = 'storybook';
     this.audio.state.night = 0.3;
@@ -702,7 +710,7 @@ export class Storybook {
       <div class="stat">📜 Drawing scraps: ${r.scraps.length} / ${L.scraps.length}</div>
       <p style="font-family:var(--kid);font-size:18px;color:#7a5a8a">Next chapter: <b>The Big House</b> — coming soon!</p>
       <button class="big-btn" data-act="again">Play this chapter again</button>
-      <button class="big-btn alt" data-act="title">Back to the title screen</button>`);
+      <button class="big-btn alt" data-act="title">🏠 Main menu (progress is saved)</button>`);
   }
 
   showPanel(html) {
@@ -715,7 +723,7 @@ export class Storybook {
       if (act === 'checkpoint') { this.togglePause(); this.respawn(false); }
       if (act === 'restart') { this.overlay.classList.add('hidden'); this.paused = false; this.save.cp = null; this.writeSave(); this.restartLevel(); }
       if (act === 'again') { this.overlay.classList.add('hidden'); this.restartLevel(); }
-      if (act === 'title') location.reload();
+      if (act === 'title') this.game.toMainMenu();
     }));
   }
 
@@ -733,7 +741,7 @@ export class Storybook {
         <button class="big-btn" data-act="resume">Keep playing</button>
         <button class="big-btn alt" data-act="checkpoint">Go back to the last checkpoint</button>
         <button class="big-btn alt" data-act="restart">Restart this chapter</button>
-        <button class="big-btn alt" data-act="title">Back to the title screen</button>
+        <button class="big-btn alt" data-act="title">🏠 Main menu (progress is saved)</button>
         <p style="font-size:14px;color:#8a6a9a">← → walk · Shift run · Space jump (hold for higher) · R checkpoint</p>`);
     } else this.overlay.classList.add('hidden');
   }

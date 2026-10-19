@@ -53,7 +53,7 @@ export class EarthLevel extends Level {
     };
     this.terrain = new Terrain({ size: 220, segments: 160, height, color });
     this.scene.add(this.terrain.mesh);
-    this.world = new World({ terrain: this.terrain, waterLevel: -20, bounds: { x: 0, z: 8, r: 62 } });
+    this.world = new World({ terrain: this.terrain, waterLevel: -20, bounds: { x: 0, z: 8, r: 62, soft: 57 } });
     this.mapBounds = { x0: -66, x1: 66, z0: -48, z1: 70 };
 
     // ---- road & sidewalks
@@ -186,7 +186,7 @@ export class EarthLevel extends Level {
     // grass & flowers
     const q = g.engine.q;
     const grassWhere = (x, z, h) => (z < -8 ? (Math.abs(z + 24.5) < 3.5 ? 0 : 0.5) : 1) * (1 - this._pathAmount(x, z) * 1.5) * (Math.abs(z - ROAD_Z) < 6 || Math.abs(z - WALK_Z) < 1.3 || Math.hypot(x + 29.2, z - 7.6) < 1.6 ? 0 : 1);
-    this.scene.add(createGrass(this.terrain, { count: Math.floor(140000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.18, 0.4], width: [0.55, 0.8] }));
+    this.scene.add(createGrass(this.terrain, { count: Math.floor(140000 * q.grass), area: 130, center: [0, 12], where: grassWhere, height: [0.18, 0.4], width: [0.4, 0.6] }));
     this.scene.add(createFlowers(this.terrain, {
       count: Math.floor(3000 * q.grass), area: 120, center: [0, 14],
       where: (x, z) => (z < -6 ? 0 : (noise(x * 0.07, z * 0.07) > 0.2 ? 0.9 : 0.05)) * (1 - this._pathAmount(x, z) * 2),
@@ -316,8 +316,17 @@ export class EarthLevel extends Level {
       if (key === 'gil') { pet.state = 'sit'; pet.stateT = 6; }
       this.scene.add(pet.root);
       this.pets[key] = pet;
+      // Buddy and the cats are big enough to bump into (not while Buddy trots after you)
+      const L = PET_LOOKS[key];
+      if (L.kind === 'dog' || L.kind === 'cat') W.addBody({ pos: pet.pos, r: L.len * 0.42, h: pet.hipY + L.r * 2, active: () => pet.state !== 'follow' });
     }
-    this.songbirds = new Songbirds(this.scene, W, { center: { x: 0, z: -24 }, count: 6 });
+    // songbirds land where you can see them: the sidewalk, garden paths and fence posts
+    const perches = [{ x: 0, z: WALK_Z, y: 0.34, hw: 14, hd: 0.8 }];
+    for (const hx of [-22, 0, 22]) {
+      perches.push({ x: hx, z: -24.5, y: 0.3, hw: 0.55, hd: 2.6 });
+      for (const sd of [-1, 1]) for (let i = 0; i <= 6; i++) perches.push({ x: hx + sd * 3.2 - 2 + i * 0.6, z: -23.2, y: 1.0, hw: 0, hd: 0 });
+    }
+    this.songbirds = new Songbirds(this.scene, W, { center: { x: 0, z: -24 }, count: 6, perches });
     const PK = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
     const talks = {
       buddy: { sound: 'bark', color: '#d98a3c', lines: [
@@ -642,6 +651,17 @@ export class EarthLevel extends Level {
         }
         if (this.mangoState === 'hurt') return g.ui.dialogue([line({ who: 'Mrs. Rosa', color: '#c76b98', pitch: 0.85 }, 'Oh dear, oh dear. My parrot Mango flew out the window this morning and hasn’t come back. Have you seen a little red and blue parrot?')]);
         return g.ui.dialogue([line({ who: 'Mrs. Rosa', color: '#c76b98', pitch: 0.85 }, 'Mango hasn’t stopped singing since you brought him home! Come by for cookies any time, dear.')]);
+      },
+    });
+
+    // At night, Jacinta can go inside and sleep until morning
+    this.addInteractable({
+      pos: new THREE.Vector3(0, 0.3, -27.0), radius: 2.0,
+      enabled: () => this.dayNight.nightAmount > 0.35,
+      label: 'Go inside and sleep until morning 🌙',
+      action: async () => {
+        await g.ui.dialogue([line(J, 'Time for bed, Pinky. Tomorrow we’ll spread more kindness!'), line(PINKY, 'Goodnight, Jacinta. Sweet dreams! 💗')]);
+        g.skipToMorning();
       },
     });
 

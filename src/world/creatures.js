@@ -111,7 +111,7 @@ export class Creatures {
   }
 
   // Birds flying in big lazy loops
-  addFlyers(kind, { center, radius = 20, height = 18, count = 3, scale = 0.012, speed = 0.25, journalKey, name }) {
+  addFlyers(kind, { center, radius = 20, height = 18, count = 3, scale = 0.012, speed = 0.25, journalKey, name, clearance = 6 }) {
     const g = this.models[kind];
     if (!g) return;
     for (let i = 0; i < count; i++) {
@@ -135,10 +135,20 @@ export class Creatures {
         c.t += dt * speed * dir;
         const x = center.x + Math.cos(c.t) * r;
         const z = center.z + Math.sin(c.t) * r * 0.8;
-        const y = h + Math.sin(c.t * 2.3) * 1.5;
         const nx = center.x + Math.cos(c.t + 0.05 * dir) * r;
         const nz = center.z + Math.sin(c.t + 0.05 * dir) * r * 0.8;
-        holder.position.set(x, y, z);
+        // fly at their usual height, but rise smoothly over hills and trees
+        // (looking a little ahead so they climb before they get there)
+        const W = this.world;
+        let ground = Math.max(W.terrainHeight(x, z), W.waterLevel);
+        for (const k of [0.15, 0.3, 0.5]) {
+          const ax = center.x + Math.cos(c.t + k * dir) * r, az = center.z + Math.sin(c.t + k * dir) * r * 0.8;
+          ground = Math.max(ground, W.terrainHeight(ax, az));
+        }
+        const want = Math.max(h + Math.sin(c.t * 2.3) * 1.5, ground + clearance);
+        c.y = c.y === undefined ? want : c.y + (want - c.y) * Math.min(1, dt * 1.2);
+        c.y = Math.max(c.y, W.terrainHeight(x, z) + clearance * 0.6);
+        holder.position.set(x, c.y, z);
         holder.rotation.y = Math.atan2(nx - x, nz - z);
         holder.rotation.z = -dir * 0.25;
       };

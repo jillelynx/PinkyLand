@@ -3,6 +3,9 @@
 import * as THREE from 'three';
 import { clamp, damp, angleDamp } from '../util/noise.js';
 
+// Ground steeper than this (rise per metre, about 50°) can't be walked or swum up
+const MAX_SLOPE = 1.15;
+
 export const AVATAR_STATS = {
   jacinta: { walk: 3.6, run: 6.6, jump: 8.6, gravity: 24, radius: 0.32, height: 1.3, eye: 1.05, swimDepth: 0.95 },
   jacintaPack: { walk: 3.5, run: 6.4, jump: 8.4, gravity: 24, radius: 0.34, height: 1.3, eye: 1.05, swimDepth: 0.95 },
@@ -126,6 +129,15 @@ export class Player {
     // ---- keep inside the world
     const b = w.bounds;
     const d = Math.hypot(this.pos.x - b.x, this.pos.z - b.z);
+    // near the edge a gentle current (or breeze) eases you back
+    const soft = b.soft ?? b.r - 12;
+    if (d > soft) {
+      const k = Math.min(1, (d - soft) / (b.r - soft));
+      const push = 7 * k * k * dt;
+      this.pos.x -= ((this.pos.x - b.x) / d) * push;
+      this.pos.z -= ((this.pos.z - b.z) / d) * push;
+      if (k > 0.25) this.events.edge?.(k);
+    }
     if (d > b.r) {
       const k = b.r / d;
       this.pos.x = b.x + (this.pos.x - b.x) * k;
@@ -201,7 +213,8 @@ export class Player {
     }
     if (this.vel.y < -28) this.vel.y = -28;
 
-    this.pos.addScaledVector(this.vel, dt);
+    this._moveH(dt);
+    this.pos.y += this.vel.y * dt;
     if (!this.grounded) this.fallTime += dt; else this.fallTime = 0;
 
     // bouncy clouds & bouncy pinkies
@@ -258,13 +271,52 @@ export class Player {
       this.events.splash?.(2);
       this.pos.y += 0.1;
     }
-    this.pos.addScaledVector(this.vel, dt);
+    this._moveH(dt);
+    this.pos.y += this.vel.y * dt;
     if (this.swimming && this.pos.y > surfaceY) { this.pos.y = damp(this.pos.y, surfaceY, 8, dt); if (this.vel.y > 0) this.vel.y = 0; }
     // don't sink into the sea floor
     const floor = w.terrainHeight(this.pos.x, this.pos.z) + 0.25;
     if (this.pos.y < floor) { this.pos.y = floor; this.vel.y = Math.max(0, this.vel.y); }
     // bob at the surface
     if (atSurface) this.pos.y += Math.sin(performance.now() * 0.003) * 0.002;
+  }
+
+  // Move sideways in small steps so fast movement can't skip through things,
+  // and slide along slopes that are too steep to climb (cliffs, pond walls).
+  _moveH(dt) {
+    const st = this.stats, w = this.world;
+    const dx = this.vel.x * dt, dz = this.vel.z * dt;
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.12));
+    const sx = dx / n, sz = dz / n;
+    for (let i = 0; i < n; i++) {
+      const ox = this.pos.x, oz = this.pos.z;
+      let nx = ox + sx, nz = oz + sz;
+      if (this._isWall(nx, nz)) {
+        const g = w.slope(nx, nz, this._sl || (this._sl = {}));
+        const ux = g.x / (g.s || 1), uz = g.z / (g.s || 1);
+        const up = sx * ux + sz * uz;
+        // keep only the part of the step that runs along the slope
+        nx = ox + sx - ux * Math.max(0, up);
+        nz = oz + sz - uz * Math.max(0, up);
+        if (this._isWall(nx, nz)) { nx = ox; nz = oz; }
+        const vin = this.vel.x * ux + this.vel.z * uz;
+        if (vin > 0) { this.vel.x -= ux * vin; this.vel.z -= uz * vin; }
+        this.againstWall = 0.2;
+      }
+      this.pos.x = nx; this.pos.z = nz;
+      w.collide(this.pos, st.radius, st.height);
+    }
+  }
+
+  // Is the ground at (x, z) a wall in front of us? Gentle hills are fine;
+  // steep banks and cliffs only block if they rise above our feet.
+  _isWall(x, z) {
+    const w = this.world;
+    const h = w.terrainHeight(x, z);
+    const feet = this.pos.y - (this.swimming ? 0.25 : 0);
+    if (h <= feet + 0.06) return false;
+    if (h > feet + 0.6) return true;
+    return w.slope(x, z, this._sl || (this._sl = {})).s > MAX_SLOPE;
   }
 
   _animateCape(dt, hs) {

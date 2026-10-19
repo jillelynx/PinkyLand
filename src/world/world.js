@@ -8,6 +8,19 @@ export class World {
     this.colliders = [];
     this.bouncers = []; // { x, z, r, top, power, onBounce }
     this.clouds = null;
+    // moving things you bump into (NPCs, pets): { pos, r, h, active?() }
+    this.bodies = [];
+  }
+
+  addBody(b) { this.bodies.push(b); return b; }
+
+  // How steep the ground is here (rise per metre), and which way is uphill
+  slope(x, z, out = { x: 0, z: 0, s: 0 }) {
+    const e = 0.5, H = this.terrain;
+    out.x = (H.getHeight(x + e, z) - H.getHeight(x - e, z)) / (2 * e);
+    out.z = (H.getHeight(x, z + e) - H.getHeight(x, z - e)) / (2 * e);
+    out.s = Math.hypot(out.x, out.z);
+    return out;
   }
 
   terrainHeight(x, z) { return this.terrain.getHeight(x, z); }
@@ -55,6 +68,21 @@ export class World {
           pos.x = c.x + nx * cos + nz * sin;
           pos.z = c.z - nx * sin + nz * cos;
         }
+      }
+    }
+    // characters and animals are solid too (soft round shapes)
+    for (const b of this.bodies) {
+      if (b.pos === pos || (b.active && !b.active())) continue;
+      if (pos.y >= b.pos.y + b.h - 0.05 || pos.y + height < b.pos.y - 0.1) continue;
+      const dx = pos.x - b.pos.x, dz = pos.z - b.pos.z;
+      const rr = b.r + radius;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < rr * rr) {
+        const d = Math.sqrt(d2);
+        // exactly on top of each other: push out sideways
+        const ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0;
+        pos.x = b.pos.x + ux * rr;
+        pos.z = b.pos.z + uz * rr;
       }
     }
   }

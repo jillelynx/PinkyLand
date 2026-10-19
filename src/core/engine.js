@@ -41,6 +41,11 @@ const GradeShader = {
       // soft dreamy lift
       c.rgb = mix(c.rgb, c.rgb * vec3(1.03, 0.99, 1.02) + vec3(0.012, 0.004, 0.018), 0.8);
       c.rgb += uWarmth * vec3(0.03, 0.012, -0.01);
+      // a little more colour and depth (keeps the pastel look, loses the milky haze)
+      float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(lum), c.rgb, 1.12);
+      vec3 sc = clamp(c.rgb, 0.0, 1.0);
+      c.rgb = mix(c.rgb, sc*sc*(3.0-2.0*sc), 0.22);
       // underwater: blue-teal tint with light shafts
       if (uUnder > 0.0) {
         float rays = pow(max(0.0, sin(uv.x*18.0 + uv.y*4.0 + uTime*0.6) * sin(uv.x*7.0 - uTime*0.3)), 3.0);
@@ -68,7 +73,7 @@ export class Engine {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 0.94;
     this.renderer.shadowMap.enabled = this.q.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -91,7 +96,7 @@ export class Engine {
     const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(size, 0.45, 0.6, 0.82);
+    this.bloom = new UnrealBloomPass(size, 0.32, 0.55, 0.92); // only true highlights glow (less milky haze)
     this.bloom.enabled = this.q.bloom;
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());

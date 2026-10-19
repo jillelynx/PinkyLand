@@ -138,7 +138,8 @@ export class DayNight {
   setTime(t) { this.time = ((t % 1) + 1) % 1; }
 
   update(dt, focus, underwater = false) {
-    if (!this.paused) this.time = (this.time + dt / this.dayLength) % 1;
+    // nights pass more than twice as fast as days, so it's mostly daytime
+    if (!this.paused) this.time = (this.time + (dt / this.dayLength) * (this.nightAmount > 0.5 ? 2.4 : 1)) % 1;
     this.uniforms.uTime.value += dt;
 
     // Directions: north = -z (top of the map), east = +x, south = +z, west = -x.
@@ -176,12 +177,12 @@ export class DayNight {
     this.sun.position.copy(focus).addScaledVector(ld, 120);
     this.sun.target.position.copy(focus);
     const dayI = smoothstep(-0.02, 0.3, elev);
-    this.sun.intensity = lerp(0.35, 2.4, dayI);
+    this.sun.intensity = lerp(0.35, 2.05, dayI); // not so strong that sunny grass turns pale
     this.sun.color.copy(c.sun);
     if (elev < -0.02) this.sun.color.set('#9fb0ff');
     this.hemi.color.copy(c.amb);
     this.hemi.groundColor.copy(c.ground);
-    this.hemi.intensity = lerp(0.55, 1.0, dayI);
+    this.hemi.intensity = lerp(0.55, 0.9, dayI);
 
     if (underwater) {
       this.scene.fog.color.set('#1b86a8').lerp(new THREE.Color('#0d2a55'), this.nightAmount * 0.8);

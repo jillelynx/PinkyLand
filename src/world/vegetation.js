@@ -51,7 +51,7 @@ function bladeGeometry() {
   // 4 segments, tapered blade with a slight curve
   const segs = 4, w = 0.07;
   const pos = [], col = [], idx = [];
-  const base = new THREE.Color('#3f8f3a'), tip = new THREE.Color('#c8f07a');
+  const base = new THREE.Color('#4a9440'), tip = new THREE.Color('#d4f382');
   for (let i = 0; i <= segs; i++) {
     const t = i / segs;
     const width = w * (1 - t * 0.92);
@@ -247,6 +247,8 @@ function treeGeometries(rand, kind) {
     trunkParts.push(br);
   }
   const blobs = kind === 'tall' ? 6 : 7;
+  const cc = new THREE.Vector3(0, height + 0.5, 0); // middle of the whole canopy
+  const blobInfo = [];
   for (let i = 0; i < blobs; i++) {
     const r = (kind === 'tall' ? 1.1 : 1.3) + rand() * 0.6;
     const g = blobGeometry(rand, r, 2);
@@ -254,23 +256,43 @@ function treeGeometries(rand, kind) {
     const d = i === 0 ? 0 : 0.9 + rand() * 0.7;
     const y = height + (i === 0 ? 0.6 : (rand() - 0.3) * 1.4);
     g.translate(Math.cos(a) * d, y, Math.sin(a) * d);
-    leafParts.push(g);
+    blobInfo.push({ g, c: new THREE.Vector3(Math.cos(a) * d, y, Math.sin(a) * d) });
+  }
+  // Soft, rounded shading: each leaf vertex's normal points away from its own
+  // blob AND from the middle of the canopy, so the tree reads as one soft
+  // mass instead of a crumpled, faceted shape.
+  const v = new THREE.Vector3(), n1 = new THREE.Vector3(), n2 = new THREE.Vector3();
+  let maxD = 0;
+  for (const { g } of blobInfo) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) maxD = Math.max(maxD, v.fromBufferAttribute(p, i).distanceTo(cc)); }
+  for (const b of blobInfo) {
+    if (b.g.index) b.g = b.g.toNonIndexed();
+    const p = b.g.attributes.position, nn = b.g.attributes.normal;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      n1.copy(v).sub(b.c).normalize();
+      n2.copy(v).sub(cc).normalize();
+      n1.multiplyScalar(0.5).addScaledVector(n2, 0.5).normalize();
+      nn.setXYZ(i, n1.x, n1.y, n1.z);
+    }
+    leafParts.push(b.g);
   }
   const trunkGeo = mergeGeometries(trunkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
-  const leafGeo = mergeGeometries(leafParts.map((g) => (g.index ? g.toNonIndexed() : g)));
-  // vertex color: lighter on top for a sun-kissed look
+  const leafGeo = mergeGeometries(leafParts);
+  // vertex color: sun-kissed on top, deeper and shadier inside and underneath
   const lp = leafGeo.attributes.position;
   const col = new Float32Array(lp.count * 3);
   let minY = Infinity, maxY = -Infinity;
   for (let i = 0; i < lp.count; i++) { minY = Math.min(minY, lp.getY(i)); maxY = Math.max(maxY, lp.getY(i)); }
   for (let i = 0; i < lp.count; i++) {
-    const t = (lp.getY(i) - minY) / (maxY - minY);
-    const k = 0.72 + t * 0.4;
-    col[i * 3] = k; col[i * 3 + 1] = k; col[i * 3 + 2] = k;
+    v.fromBufferAttribute(lp, i);
+    const t = (v.y - minY) / (maxY - minY);
+    const outer = THREE.MathUtils.smoothstep(v.distanceTo(cc) / maxD, 0.35, 0.95);
+    const k = (0.6 + t * 0.42) * (0.72 + outer * 0.34);
+    // warm the sunny tops a touch, cool the shady undersides
+    col[i * 3] = k * (1 + t * 0.04); col[i * 3 + 1] = k; col[i * 3 + 2] = k * (1.04 - t * 0.08);
   }
   leafGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   trunkGeo.computeVertexNormals();
-  leafGeo.computeVertexNormals();
   return { trunkGeo, leafGeo, height };
 }
 
@@ -303,7 +325,8 @@ export function createTrees(terrain, spots, { seed = 5 } = {}) {
       m.compose(p, q, s);
       trunks.setMatrixAt(i, m);
       leaves.setMatrixAt(i, m);
-      leaves.setColorAt(i, new THREE.Color(sp.color || '#7cc96b'));
+      // each tree a slightly different shade, like real trees
+      leaves.setColorAt(i, new THREE.Color(sp.color || '#7cc96b').offsetHSL((rand() - 0.5) * 0.03, (rand() - 0.5) * 0.08, (rand() - 0.5) * 0.06));
       colliders.push({ type: 'cyl', x: sp.x, z: sp.z, r: 0.45 * sc, top: h + geos[k].height * sc * 0.8, bottom: h - 1 });
     });
     trunks.castShadow = leaves.castShadow = true;
@@ -345,15 +368,26 @@ export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}
 export function createBushes(terrain, spots, { seed = 13 } = {}) {
   const rand = makeRandom(seed);
   const parts = [];
+  const cc = new THREE.Vector3(0, 0.35, 0), v = new THREE.Vector3(), n1 = new THREE.Vector3(), n2 = new THREE.Vector3();
   for (let i = 0; i < 5; i++) {
     let g = blobGeometry(rand, 0.55 + rand() * 0.25, 2); if (g.index) g = g.toNonIndexed();
     const a = rand() * 6.28;
-    g.translate(Math.cos(a) * 0.45, 0.45 + rand() * 0.2, Math.sin(a) * 0.45);
+    const c = new THREE.Vector3(Math.cos(a) * 0.45, 0.45 + rand() * 0.2, Math.sin(a) * 0.45);
+    g.translate(c.x, c.y, c.z);
+    // soft rounded normals (see trees)
+    const p = g.attributes.position, nn = g.attributes.normal, col = [];
+    for (let k = 0; k < p.count; k++) {
+      v.fromBufferAttribute(p, k);
+      n1.copy(v).sub(c).normalize(); n2.copy(v).sub(cc).normalize();
+      n1.add(n2).normalize(); nn.setXYZ(k, n1.x, n1.y, n1.z);
+      const sh = 0.7 + 0.35 * THREE.MathUtils.clamp(v.y / 1.1, 0, 1);
+      col.push(sh, sh, sh);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     parts.push(g);
   }
   const geo = mergeGeometries(parts);
-  geo.computeVertexNormals();
-  const mat = addWind(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 }), { strength: 0.03, heightPow: 1, push: false, key: 'bush' });
+  const mat = addWind(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.85 }), { strength: 0.03, heightPow: 1, push: false, key: 'bush' });
   const im = new THREE.InstancedMesh(geo, mat, spots.length);
   const m = new THREE.Matrix4();
   spots.forEach((s, i) => {

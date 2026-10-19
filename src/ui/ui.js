@@ -391,8 +391,10 @@ export class UI {
         <b>Hint · Journal · Map</b><span>H · J · M</span>
       </div>
       <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
-        <button class="big-btn alt" data-restart style="min-width:0;font-size:16px">Start a new game</button>
         <button class="big-btn" data-resume style="min-width:0;font-size:16px">Back to playing</button>
+        <button class="big-btn alt" data-morning style="min-width:0;font-size:16px">☀️ Skip to morning</button>
+        <button class="big-btn alt" data-menu style="min-width:0;font-size:16px">🏠 Main menu (progress is saved)</button>
+        <button class="big-btn alt" data-restart style="min-width:0;font-size:16px">Start a new game</button>
       </div>`, 'settings');
     this.panel.querySelector('[data-q]').value = s.quality;
     this.panel.querySelectorAll('[data-vol]').forEach((r) => r.addEventListener('input', () => this.game.setVolume(r.dataset.vol, parseFloat(r.value))));
@@ -401,6 +403,8 @@ export class UI {
     this.panel.querySelector('[data-ml]').addEventListener('change', (e) => this.game.setMouseLook(e.target.checked));
     this.panel.querySelector('[data-ctl]').addEventListener('change', (e) => { this.game.settings.hideControls = !e.target.checked; this.showControls(e.target.checked); this.game.saveGame(); });
     this.panel.querySelector('[data-resume]').addEventListener('click', () => this.close());
+    this.panel.querySelector('[data-menu]').addEventListener('click', () => this.game.toMainMenu());
+    this.panel.querySelector('[data-morning]').addEventListener('click', () => this.game.skipToMorning());
     this.panel.querySelector('[data-restart]').addEventListener('click', () => {
       if (this.panel.querySelector('[data-restart]').dataset.sure) { this.game.newGame(); return; }
       const b = this.panel.querySelector('[data-restart]');

@@ -92,6 +92,19 @@ export class CameraRig {
     }
     if (!underwater && pos.y < this.waterLevel + 0.35 && this.smoothTarget.y > this.waterLevel) pos.y = this.waterLevel + 0.35;
     if (underwater && pos.y > this.waterLevel - 0.3) pos.y = this.waterLevel - 0.3;
+    // never sit inside a hill or a pond wall (you'd see through the world):
+    // if the ground is between the camera and the player, move in closer
+    if (this.groundAt) {
+      let k = 1;
+      const st = this.smoothTarget, steps = 14;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const x = st.x + (pos.x - st.x) * t, y = st.y + (pos.y - st.y) * t, z = st.z + (pos.z - st.z) * t;
+        if (y < this.groundAt(x, z) + 0.25) { k = Math.max(0.1, (i - 1.5) / steps); break; }
+      }
+      this._pull = k < (this._pull ?? 1) ? k : damp(this._pull ?? 1, k, 2.5, dt);
+      if (this._pull < 0.999) pos.set(st.x + (pos.x - st.x) * this._pull, st.y + (pos.y - st.y) * this._pull, st.z + (pos.z - st.z) * this._pull);
+    }
     const look = this._look.copy(this.smoothTarget);
 
     this.overrideBlend = damp(this.overrideBlend, this.override ? 1 : 0, 3, dt);
