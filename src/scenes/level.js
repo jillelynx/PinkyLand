@@ -25,6 +25,17 @@ export class Level {
     this.trail = null;
     this.time = 0;
     this.mapExplored = new Uint8Array(64 * 64);
+    // remember the explored parts of the map between visits and play sessions
+    const saved = game.state.explored?.[name];
+    if (saved) for (let i = 0; i < saved.length; i++) { const v = parseInt(saved[i], 16); for (let b = 0; b < 4; b++) this.mapExplored[i * 4 + b] = (v >> b) & 1; }
+  }
+
+  saveExplored() {
+    let out = '';
+    for (let i = 0; i < this.mapExplored.length; i += 4) { let v = 0; for (let b = 0; b < 4; b++) v |= this.mapExplored[i + b] << b; out += v.toString(16); }
+    const st = this.game.state;
+    st.explored = st.explored || {};
+    st.explored[this.name] = out;
   }
 
   setupSky(startTime) {
@@ -344,8 +355,9 @@ export class Level {
       for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
         if (i * i + j * j > 10) continue;
         const x = gx + i, z = gz + j;
-        if (x >= 0 && z >= 0 && x < 64 && z < 64) this.mapExplored[z * 64 + x] = 1;
+        if (x >= 0 && z >= 0 && x < 64 && z < 64 && !this.mapExplored[z * 64 + x]) { this.mapExplored[z * 64 + x] = 1; this._exploredDirty = true; }
       }
+      if (this._exploredDirty) { this._exploredDirty = false; this.saveExplored(); }
     }
 
     // sound
