@@ -170,3 +170,23 @@ button { font-family: var(--round); cursor: pointer; }
 
 .hud-top-right .clock { display: none; }
 @media (max-width: 1100px) { .compass { left: 40%; } }
+
+/* grown-ups menu */
+.grownup-link { margin-top: 14px; background: none; border: none; color: #a58ab5; font-size: 13px; cursor: pointer; text-decoration: underline; font-family: inherit; }
+.grownup-link:hover { color: #7a4a8a; }
+.grownup-overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(60, 30, 70, .45); pointer-events: auto; }
+.grownup-panel { background: #fffaf6; border-radius: 24px; padding: 26px 30px; width: min(420px, 92vw); text-align: center; box-shadow: 0 20px 60px rgba(60,20,60,.35); font-family: var(--round, sans-serif); color: #4a2d4a; }
+.grownup-panel.wide { width: min(720px, 94vw); max-height: 90vh; overflow: auto; }
+.grownup-panel h2 { margin: 0 0 8px; }
+.gu-pw { width: 100%; box-sizing: border-box; font-size: 20px; padding: 12px 14px; border-radius: 14px; border: 2px solid #e8c6dc; margin: 10px 0 4px; }
+.gu-msg { min-height: 20px; color: #d0405a; font-size: 14px; }
+.gu-row { display: flex; gap: 10px; justify-content: center; }
+.gu-row .big-btn { min-width: 0; }
+.gu-test { display: block; text-align: left; background: #eef8f1; border-radius: 14px; padding: 10px 14px; margin: 8px 0 14px; font-size: 15px; }
+.gu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.gu-grid .big-btn { min-width: 0; width: 100%; margin: 0; font-size: 15px; padding: 12px 14px; text-align: left; }
+.grownup-panel .gu-close { margin-top: 4px; }
+@media (max-width: 560px) { .gu-grid { grid-template-columns: 1fr; } }
+.gu-pwchange { text-align: left; margin: 6px 0 14px; font-size: 14px; }
+.gu-newpw { font-size: 15px; padding: 8px 10px; border-radius: 10px; border: 2px solid #e8c6dc; }
+.test-badge { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; background: rgba(255, 245, 200, .95); color: #6a4a10; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 12px; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.15); }

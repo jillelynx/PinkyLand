@@ -50,7 +50,7 @@ export class Storybook {
     this.writeSave();
   }
 
-  writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.save)); } catch (e) { /* ignore */ } }
+  writeSave() { if (this.game.testMode) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.save)); } catch (e) { /* ignore */ } }
 
   // ---------------- UI ----------------
   buildUI() {

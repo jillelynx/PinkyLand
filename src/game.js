@@ -153,8 +153,10 @@ export class Game {
           </div>
         </div>
         <div class="title-note">Best with headphones 🎧 · Use the mouse and keyboard (or a game controller)</div>
+        <button class="grownup-link" data-grownup>🔑 Grown-ups</button>
       </div>`;
     document.body.appendChild(t);
+    t.querySelector('[data-grownup]').addEventListener('click', () => { this.audio.start(); this.audio.click(); this.openGrownUp(t); });
     t.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
       this.audio.start();
       this.audio.click();
@@ -167,6 +169,103 @@ export class Game {
         this.playIntro();
       } else this.loadLevel(this.state.chapter);
     }));
+  }
+
+  // ---------------- Grown-ups menu: jump to any part of the game ----------------
+  // A simple password keeps little players out. (It's a kid lock, not real security.)
+  grownUpPassword() {
+    try { return localStorage.getItem('pinky-land-grownup-pw') || 'pinky'; } catch (e) { return 'pinky'; }
+  }
+
+  openGrownUp(titleEl) {
+    const o = document.createElement('div');
+    o.className = 'grownup-overlay';
+    o.innerHTML = `<div class="grownup-panel">
+      <h2>🔑 Grown-ups only</h2>
+      <p>Type the password to jump to any part of the game.</p>
+      <input type="password" class="gu-pw" placeholder="Password" autocomplete="off">
+      <div class="gu-msg"></div>
+      <div class="gu-row"><button class="big-btn gu-ok">Open</button><button class="big-btn alt gu-cancel">Cancel</button></div>
+    </div>`;
+    document.body.appendChild(o);
+    const pw = o.querySelector('.gu-pw');
+    setTimeout(() => pw.focus(), 50);
+    const tryOpen = () => {
+      if (pw.value.trim().toLowerCase() === this.grownUpPassword().toLowerCase()) { o.remove(); this.showGrownUpMenu(titleEl); }
+      else { o.querySelector('.gu-msg').textContent = 'That’s not it. Try again.'; pw.value = ''; pw.focus(); }
+    };
+    pw.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') tryOpen(); if (e.key === 'Escape') o.remove(); });
+    o.querySelector('.gu-ok').addEventListener('click', tryOpen);
+    o.querySelector('.gu-cancel').addEventListener('click', () => o.remove());
+  }
+
+  showGrownUpMenu(titleEl) {
+    const o = document.createElement('div');
+    o.className = 'grownup-overlay';
+    const jumps = [
+      ['earth-start', '🏘️ Earth — start of Chapter 1'],
+      ['earth-hearts', '💗 Earth — all 5 kindness hearts done (magic door open)'],
+      ['home', '🏠 Inside Jacinta’s house'],
+      ['pinky', '🌸 Pinky Land — just arrived'],
+      ['pinky-bb', '🧸 Pinky Land — playing as Belly Button'],
+      ['pinky-cape', '🦸 Pinky Land — with the Sky Cape'],
+      ['pinky-night', '🌙 Pinky Land — at night (campfire time)'],
+      ['sb-1', '📖 Storybook — Chapter 1'],
+      ['sb-2', '📖 Storybook — Chapter 2: The Big House'],
+    ];
+    o.innerHTML = `<div class="grownup-panel wide">
+      <h2>🔑 Grown-ups menu</h2>
+      <label class="gu-test"><input type="checkbox" class="gu-testmode" checked> <b>Test mode</b> — don’t change the saved game (recommended, so your child’s progress stays safe)</label>
+      <div class="gu-grid">${jumps.map(([k, label]) => `<button class="big-btn alt" data-jump="${k}">${label}</button>`).join('')}</div>
+      <details class="gu-pwchange"><summary>Change the password</summary>
+        <input type="text" class="gu-newpw" placeholder="New password" autocomplete="off"> <button class="big-btn alt gu-savepw" style="min-width:0">Save</button> <span class="gu-pwmsg"></span>
+      </details>
+      <button class="big-btn gu-close">Close</button>
+    </div>`;
+    document.body.appendChild(o);
+    o.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => e.stopPropagation()));
+    o.querySelector('.gu-close').addEventListener('click', () => o.remove());
+    o.querySelector('.gu-savepw').addEventListener('click', () => {
+      const v = o.querySelector('.gu-newpw').value.trim();
+      if (v.length < 3) { o.querySelector('.gu-pwmsg').textContent = 'Use at least 3 letters.'; return; }
+      try { localStorage.setItem('pinky-land-grownup-pw', v); } catch (e) { /* ignore */ }
+      o.querySelector('.gu-pwmsg').textContent = '✓ Saved';
+    });
+    o.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => {
+      this.audio.click();
+      const test = o.querySelector('.gu-testmode').checked;
+      o.remove();
+      titleEl?.remove();
+      this.adminJump(b.dataset.jump, test);
+    }));
+  }
+
+  adminJump(where, test = true) {
+    this.testMode = test;
+    if (test) this.showTestBadge();
+    if (where === 'sb-1' || where === 'sb-2') { this.startStorybook(false, where === 'sb-1' ? 0 : 1); return; }
+    // start from a copy of the current game so nothing real is changed in test mode
+    const st = test ? JSON.parse(JSON.stringify(this.state)) : this.state;
+    this.state = st;
+    const allHearts = { hearts: ['maya', 'oliver', 'bully', 'mango', 'litter'], liev: true, bandage: false, mayaMet: true, mango: 'home', litter: 8, bullyDone: true };
+    if (where === 'earth-start') { Object.assign(st, freshState()); this.state = st; return this.loadLevel('earth'); }
+    if (where === 'earth-hearts') { st.earth = allHearts; st.avatar = 'jacintaPack'; st.time = 0.4; return this.loadLevel('earth'); }
+    if (where === 'home') { st.earth = st.earth || { hearts: [], liev: true, bandage: false, mayaMet: false, mango: 'hurt', litter: 0, bullyDone: false }; st.avatar = 'jacintaPack'; return this.loadLevel('home'); }
+    // Pinky Land
+    st.earth = st.earth && st.earth.hearts?.length >= 5 ? st.earth : allHearts;
+    st.pinky = { arrived: true, met: (st.pinky && st.pinky.met) || [], cape: where === 'pinky-cape' || !!(st.pinky && st.pinky.cape), tent: !!(st.pinky && st.pinky.tent) };
+    st.avatar = where === 'pinky-bb' ? 'bellybutton' : 'jacinta';
+    this.forceTime = where === 'pinky-night' ? 0.86 : 0.33;
+    st.time = this.forceTime;
+    return this.loadLevel('pinky');
+  }
+
+  showTestBadge() {
+    if (document.querySelector('.test-badge')) return;
+    const b = document.createElement('div');
+    b.className = 'test-badge';
+    b.textContent = '🧪 Test mode — not saving';
+    document.body.appendChild(b);
   }
 
   // ---------------- Pinky's Storybook (2.5D platformer) ----------------
@@ -394,6 +493,7 @@ export class Game {
 
   saveGame() {
     if (this.level) this.state.time = this.level.dayNight.time;
+    if (this.testMode) return; // grown-up test mode never touches the real saved game
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ state: this.state, settings: this.settings })); } catch (e) { /* ignore */ }
   }
 
