@@ -11,6 +11,8 @@ const opts = {
   sourcemap: false,
   target: ['safari16', 'chrome110'],
   logLevel: 'info',
+  // the date and time of this build, shown small on the title screen
+  define: { __BUILD__: JSON.stringify(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) },
 };
 if (watch) { const ctx = await esbuild.context(opts); await ctx.watch(); }
 else await esbuild.build(opts);

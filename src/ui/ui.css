@@ -200,3 +200,5 @@ button { font-family: var(--round); cursor: pointer; }
 .gu-pwchange { text-align: left; margin: 6px 0 14px; font-size: 14px; }
 .gu-newpw { font-size: 15px; padding: 8px 10px; border-radius: 10px; border: 2px solid #e8c6dc; }
 .test-badge { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; background: rgba(255, 245, 200, .95); color: #6a4a10; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 12px; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+
+.version-note { margin-top: 6px; font-size: 11px; color: #b39cc4; }

@@ -154,6 +154,7 @@ export class Game {
         </div>
         <div class="title-note">Best with headphones 🎧 · Use the mouse and keyboard (or a game controller)</div>
         <button class="grownup-link" data-grownup>🔑 Grown-ups</button>
+        <div class="version-note">Version: ${typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev'}</div>
       </div>`;
     document.body.appendChild(t);
     t.querySelector('[data-grownup]').addEventListener('click', () => { this.audio.start(); this.audio.click(); this.openGrownUp(t); });
