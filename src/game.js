@@ -107,7 +107,15 @@ export class Game {
     jac.backpackSlot.add(mini.root);
     jac.miniPinky = mini;
     const origUpdate = jac.update.bind(jac);
-    jac.update = (dt) => { origUpdate(dt); if (jac.backpack.visible) mini.update(dt); };
+    // Jacinta always wears her explorer backpack; mini Pinky only rides in it on Earth
+    jac.showPinkyInPack = (on) => { mini.root.visible = on; };
+    jac.update = (dt) => {
+      origUpdate(dt);
+      jac.backpack.visible = true;
+      if (mini.root.visible) mini.update(dt);
+      // the cape drapes over the backpack
+      if (jac.cape && !jac._capeFit) { jac._capeFit = true; jac.cape.children[0].position.set(0, 0.02, -0.17); jac.cape.children[0].scale.set(1.15, 1.05, 1); }
+    };
     // capes (hidden until found)
     const addCape = (model, parent, pos, scale = 1) => {
       const cape = createCape(JACINTA.cape, scale);
@@ -150,6 +158,7 @@ export class Game {
             ${storybookHasSave() ? '<button class="big-btn" data-go="sb-continue">Continue</button>' : ''}
             <button class="big-btn ${storybookHasSave() ? 'alt' : ''}" data-go="sb-new">${storybookHasSave() ? 'Start Chapter 1 Again' : 'Open the Storybook'}</button>
             <button class="big-btn alt" data-go="sb-ch2">Chapter 2: The Big House ✨</button>
+            <button class="big-btn alt" data-go="sb-ch3">Chapter 3: Jacinta the Explorer 🌴</button>
           </div>
         </div>
         <div class="title-note">Best with headphones 🎧 · Use the mouse and keyboard (or a game controller)</div>
@@ -163,6 +172,7 @@ export class Game {
       this.audio.click();
       t.remove();
       if (b.dataset.go === 'sb-ch2') { this.startStorybook(false, 1); return; }
+      if (b.dataset.go === 'sb-ch3') { this.startStorybook(false, 2); return; }
       if (b.dataset.go.startsWith('sb-')) { this.startStorybook(b.dataset.go === 'sb-continue'); return; }
       if (b.dataset.go === 'new') {
         this.state = freshState();
@@ -213,6 +223,7 @@ export class Game {
       ['pinky-night', '🌙 Pinky Land — at night (campfire time)'],
       ['sb-1', '📖 Storybook — Chapter 1'],
       ['sb-2', '📖 Storybook — Chapter 2: The Big House'],
+      ['sb-3', '🌴 Storybook — Chapter 3: Jacinta the Explorer'],
     ];
     o.innerHTML = `<div class="grownup-panel wide">
       <h2>🔑 Grown-ups menu</h2>
@@ -244,7 +255,7 @@ export class Game {
   adminJump(where, test = true) {
     this.testMode = test;
     if (test) this.showTestBadge();
-    if (where === 'sb-1' || where === 'sb-2') { this.startStorybook(false, where === 'sb-1' ? 0 : 1); return; }
+    if (where === 'sb-1' || where === 'sb-2' || where === 'sb-3') { this.startStorybook(false, +where.slice(3) - 1); return; }
     // start from a copy of the current game so nothing real is changed in test mode
     const st = test ? JSON.parse(JSON.stringify(this.state)) : this.state;
     this.state = st;
@@ -279,6 +290,7 @@ export class Game {
     let idx = chapter;
     if (resume && sv.cp) idx = Math.max(0, LEVELS.findIndex((l) => l.id === sv.cp.level));
     else if (resume && sv.done && sv.done[1] && !sv.done[2]) idx = 1;
+    else if (resume && sv.done && sv.done[2] && !sv.done[3]) idx = 2;
     this.storybook.start(idx, resume);
   }
 
@@ -358,7 +370,7 @@ export class Game {
     const lievJoined = !earth || this.state.earth?.liev;
     const prevPos = L.player.pos.clone();
     L.player.setAvatar(key);
-    M.jacinta.backpack.visible = key === 'jacintaPack' || (earth && key === 'liev');
+    M.jacinta.showPinkyInPack(key === 'jacintaPack' || (earth && key === 'liev'));
     let followers = [];
     if (earth) {
       if (key === 'liev') followers = ['jacinta'];

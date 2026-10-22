@@ -3,22 +3,28 @@
 // ---------------------------------------------------------------
 export const JACINTA = {
   name: 'Jacinta',
-  skin: '#f1cfb8',
-  hair: '#3a2317',
-  hairHighlight: '#5c3a26',
+  // explorer outfit (from the family's character picture)
+  skin: '#ecbf9f',
+  hair: '#4a2a18',
+  hairHighlight: '#7d4d2a',
   hairLength: 'long', // curls fall well past her shoulders
   eyes: '#3a2316',
   brows: '#3a2317',
   smile: 'closed', // her gentle closed-mouth smile
   cape: '#22a7e0', // shiny turquoise-blue cape (special ability)
-  hoodie: '#ffb3cf',
-  hoodieInner: '#ff8fb8',
-  shorts: '#6fc3e8', // "dolphin" shorts
-  shortsTrim: '#ffffff',
-  shoes: '#1d1b22', // black sneakers
-  shoeAccent: '#ff8fb8', // pink soles and laces
-  shoeTrim: '#22c4c9', // turquoise stripe
-  legWarmers: ['#ffd1e3', '#ffffff'],
+  tee: '#ab5cb2', // heathered purple t-shirt
+  teeDark: '#7a3586',
+  shorts: '#878a58', // olive cargo shorts with rolled cuffs
+  shortsCuff: '#9a9c68',
+  belt: '#6b3f22',
+  buckle: '#c9a24a',
+  boots: '#8a5a33', // brown hiking boots
+  bootSole: '#3a2c24',
+  laces: '#9b4fb0',
+  bootSocks: '#9b5aa8', // purple socks peeking out
+  pack: '#5f6140', // olive canvas backpack
+  packLeather: '#6b3f22',
+  legWarmers: ['#c9a6d6', '#f3ece0'],
   height: 1.0,
 };
 

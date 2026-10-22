@@ -48,6 +48,21 @@ function stripeTexture(colors, stripes = 6) {
   return t;
 }
 
+// soft heathered knit (Jacinta's purple tee)
+function heatherTexture(color) {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = color; g.fillRect(0, 0, 128, 128);
+  const r = makeRandom(5);
+  for (let i = 0; i < 1600; i++) { g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.10)' : 'rgba(40,0,50,0.10)'; g.fillRect(r() * 128, r() * 128, 1 + r() * 3, 1); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  return t;
+}
+
 function jerseyTexture(style) {
   const W = 512, H = 256;
   const c = document.createElement('canvas');
@@ -263,8 +278,8 @@ export class Kid {
     this.body.scale.setScalar(adult ? 1.25 * S / 1.73 * 1.38 : S);
 
     const skin = mat(style.skin, { roughness: 0.6 });
-    const topColor = style.hoodie || style.jersey || style.top;
-    const topMat = kind === 'jacinta' ? fabric(topColor) : kind === 'liev' ? new THREE.MeshStandardMaterial({ map: jerseyTexture(style), roughness: 0.6 }) : fabric(topColor);
+    const topColor = style.tee || style.hoodie || style.jersey || style.top;
+    const topMat = style.tee ? new THREE.MeshPhysicalMaterial({ map: heatherTexture(style.tee), roughness: 0.95, sheen: 0.6, sheenColor: new THREE.Color('#e0b8e8') }) : kind === 'jacinta' ? fabric(topColor) : kind === 'liev' ? new THREE.MeshStandardMaterial({ map: jerseyTexture(style), roughness: 0.6 }) : fabric(topColor);
     const bottomMat = fabric(style.shorts || style.bottom, { sheen: 0.3, roughness: 0.6 });
     const shoeMat = mat(style.shoes || '#ffffff', { roughness: 0.5 });
 
@@ -288,7 +303,22 @@ export class Kid {
       th.position.y = -thigh / 2;
       leg.add(th);
       // shorts leg opening
-      if (!longPants) {
+      if (!longPants && style.shortsCuff) {
+        // roomy cargo shorts with a rolled cuff and a side pocket
+        const sl = mesh(new THREE.CylinderGeometry(0.084, 0.1, 0.13, 14, 1, true), bottomMat);
+        sl.position.y = -0.065;
+        leg.add(sl);
+        const cuff = mesh(new THREE.TorusGeometry(0.098, 0.016, 6, 18), fabric(style.shortsCuff, { sheen: 0.3, roughness: 0.7 }));
+        cuff.rotation.x = Math.PI / 2;
+        cuff.position.y = -0.125;
+        leg.add(cuff);
+        const pk = mesh(new THREE.BoxGeometry(0.02, 0.06, 0.06), bottomMat);
+        pk.position.set(side * 0.096, -0.07, 0);
+        leg.add(pk);
+        const flap = mesh(new THREE.BoxGeometry(0.024, 0.018, 0.066), fabric(style.shortsCuff));
+        flap.position.set(side * 0.098, -0.04, 0);
+        leg.add(flap);
+      } else if (!longPants) {
         const sl = mesh(new THREE.CylinderGeometry(0.082, 0.095, 0.1, 14, 1, true), bottomMat);
         sl.material = bottomMat;
         sl.position.y = -0.05;
@@ -334,6 +364,28 @@ export class Kid {
       const foot = new THREE.Group();
       foot.position.y = -shin;
       knee.add(foot);
+      if (style.boots) {
+        // chunky brown hiking boots with purple laces and a sock cuff
+        const bootM = mat(style.boots, { roughness: 0.8 });
+        const toe = mesh(new THREE.SphereGeometry(1, 16, 12), bootM);
+        toe.scale.set(0.072, 0.056, 0.12); toe.position.set(0, -0.02, 0.035); foot.add(toe);
+        const shaft = mesh(new THREE.CylinderGeometry(0.066, 0.07, 0.09, 14), bootM);
+        shaft.position.y = 0.012; foot.add(shaft);
+        const collar = mesh(new THREE.TorusGeometry(0.064, 0.014, 6, 16), mat('#5a3a22', { roughness: 0.8 }));
+        collar.rotation.x = Math.PI / 2; collar.position.y = 0.056; foot.add(collar);
+        const sock = mesh(new THREE.TorusGeometry(0.058, 0.02, 6, 16), fabric(style.bootSocks));
+        sock.rotation.x = Math.PI / 2; sock.position.y = 0.076; foot.add(sock);
+        const sole = mesh(new THREE.CylinderGeometry(1, 1, 1, 16), mat(style.bootSole, { roughness: 0.9 }));
+        sole.scale.set(0.076, 0.03, 0.126); sole.position.set(0, -0.06, 0.035); foot.add(sole);
+        const cap = mesh(new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat('#6e4527', { roughness: 0.8 }));
+        cap.scale.set(0.07, 0.04, 0.05); cap.rotation.x = Math.PI / 2; cap.position.set(0, -0.035, 0.12); foot.add(cap);
+        for (let i = 0; i < 4; i++) {
+          const lace = mesh(new THREE.BoxGeometry(0.05, 0.008, 0.008), mat(style.laces));
+          lace.position.set(0, 0.04 - i * 0.022, 0.06 + i * 0.012); lace.rotation.x = -0.6; foot.add(lace);
+        }
+        this.legs.push({ leg, knee, foot, warmer });
+        continue;
+      }
       const shoe = mesh(new THREE.SphereGeometry(1, 16, 12), shoeMat);
       shoe.scale.set(0.068, 0.05, 0.115);
       shoe.position.set(0, -0.025, 0.035);
@@ -371,7 +423,23 @@ export class Kid {
     this.spine.add(torso);
     this.torso = torso;
 
-    if (kind === 'jacinta') {
+    if (style.tee) {
+      // t-shirt: a little V-neck, a soft neckband and a brown belt with a brass buckle
+      const vneck = mesh(new THREE.CircleGeometry(0.045, 3), skin);
+      vneck.rotation.z = -Math.PI / 2;
+      vneck.scale.set(1, 0.8, 1);
+      vneck.position.set(0, torsoLen - 0.06, torsoR * 0.8 + 0.004);
+      this.spine.add(vneck);
+      const band = mesh(new THREE.TorusGeometry(0.06, 0.009, 6, 18), fabric(style.teeDark));
+      band.rotation.x = Math.PI / 2 - 0.25; band.position.set(0, torsoLen - 0.02, 0.01);
+      this.spine.add(band);
+      const belt = mesh(new THREE.TorusGeometry(0.152, 0.016, 6, 28), mat(style.belt, { roughness: 0.6 }));
+      belt.rotation.x = Math.PI / 2; belt.scale.set(1, 0.8, 1); belt.position.y = 0.05;
+      this.hips.add(belt);
+      const buckle = mesh(new THREE.BoxGeometry(0.045, 0.034, 0.012), mat(style.buckle, { metalness: 0.7, roughness: 0.35 }));
+      buckle.position.set(0, 0.05, 0.125);
+      this.hips.add(buckle);
+    } else if (kind === 'jacinta') {
       // kangaroo pocket
       const pocket = mesh(new THREE.CapsuleGeometry(0.045, 0.12, 4, 8), fabric(style.hoodieInner));
       pocket.rotation.z = Math.PI / 2;
@@ -469,14 +537,22 @@ export class Kid {
     this.arms = [];
     const shoulderY = torsoLen - 0.07;
     const upper = adult ? 0.28 : 0.15, fore = adult ? 0.26 : 0.14;
-    const longSleeves = kind === 'jacinta' || style.longSleeves;
+    const longSleeves = (kind === 'jacinta' && !style.tee) || style.longSleeves;
     for (const side of [-1, 1]) {
       const sh = new THREE.Group();
       sh.position.set(side * (torsoR + 0.03), shoulderY, 0);
       this.spine.add(sh);
-      const ua = mesh(new THREE.CapsuleGeometry(adult ? 0.055 : 0.05, upper - 0.05, 4, 10), longSleeves || true ? topMat : skin);
+      const ua = mesh(new THREE.CapsuleGeometry(adult ? 0.055 : 0.05, upper - 0.05, 4, 10), style.tee ? skin : topMat);
       ua.position.y = -upper / 2;
       sh.add(ua);
+      if (style.tee) {
+        const sleeve = mesh(new THREE.CylinderGeometry(0.06, 0.066, upper * 0.6, 12), topMat);
+        sleeve.position.y = -upper * 0.25;
+        sh.add(sleeve);
+        const top = mesh(new THREE.SphereGeometry(0.06, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), topMat);
+        top.position.y = -upper * 0.0 + 0.0;
+        sh.add(top);
+      }
       const elbow = new THREE.Group();
       elbow.position.y = -upper;
       sh.add(elbow);
@@ -499,8 +575,8 @@ export class Kid {
       this.arms.push({ sh, elbow, hand: handSlot });
     }
 
-    // hood with bear ears (Jacinta)
-    if (kind === 'jacinta') {
+    // hood with bear ears (Jacinta, when she wore her hoodie)
+    if (kind === 'jacinta' && style.hoodie) {
       const hoodMat = fabric(style.hoodie);
       const inner = fabric(style.hoodieInner);
       // hood down: rests on her upper back
@@ -540,21 +616,50 @@ export class Kid {
 
     // backpack (for carrying Pinky)
     this.backpack = new THREE.Group();
-    const bp = mesh(new THREE.CapsuleGeometry(0.12, 0.1, 6, 12), fabric('#b9a6ff'));
+    const packC = style.pack || '#b9a6ff', leather = style.packLeather || '#8f7ae0';
+    const bp = mesh(new THREE.CapsuleGeometry(0.12, 0.1, 6, 12), fabric(packC, { roughness: 0.95 }));
     bp.scale.set(1.1, 1, 0.6);
     this.backpack.add(bp);
-    const flap = mesh(new THREE.CapsuleGeometry(0.06, 0.12, 4, 10), fabric('#a08cf0'));
+    // flap pocket on the back of the pack
+    const flap = mesh(new THREE.CapsuleGeometry(0.06, 0.12, 4, 10), fabric(style.pack ? '#6c6e4a' : '#a08cf0'));
     flap.rotation.z = Math.PI / 2;
     flap.scale.set(1, 1, 0.4);
-    flap.position.set(0, -0.06, 0.07);
+    flap.position.set(0, -0.06, -0.07);
     this.backpack.add(flap);
+    const leatherM = mat(leather, { roughness: 0.6 });
+    if (style.pack) {
+      // leather buckle straps on the front pocket and a top handle
+      for (const s of [-1, 1]) {
+        const b = mesh(new THREE.BoxGeometry(0.022, 0.1, 0.012), leatherM);
+        b.position.set(s * 0.05, -0.05, -0.1); this.backpack.add(b);
+        const bk = mesh(new THREE.BoxGeometry(0.026, 0.018, 0.008), mat(style.buckle || '#c9a24a', { metalness: 0.7, roughness: 0.35 }));
+        bk.position.set(s * 0.05, -0.08, -0.107); this.backpack.add(bk);
+      }
+      const handle = mesh(new THREE.TorusGeometry(0.035, 0.01, 6, 12, Math.PI), leatherM);
+      handle.position.set(0, 0.17, 0); this.backpack.add(handle);
+      // a little water bottle in the side pocket
+      const bottle = mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 10), mat('#56614a', { roughness: 0.5 }));
+      bottle.position.set(0.13, 0.04, 0); this.backpack.add(bottle);
+    }
+    // shoulder straps come over her shoulders and down her front
+    const packZ = kind === 'jacinta' ? (style.hoodie ? -0.3 : -0.2) : -torsoR * 0.8 - 0.06;
     for (const s of [-1, 1]) {
-      const strap = mesh(new THREE.TorusGeometry(0.11, 0.014, 6, 14, Math.PI), fabric('#8f7ae0'));
+      const strap = mesh(new THREE.TorusGeometry(0.11, 0.016, 6, 14, Math.PI), style.pack ? leatherM : fabric('#8f7ae0'));
       strap.rotation.y = Math.PI / 2;
-      strap.position.set(s * 0.09, 0.02, 0.12);
+      strap.scale.set(1, 1, (-packZ + torsoR * 0.8) / 0.22);
+      strap.position.set(s * 0.085, 0.02, (-packZ + torsoR * 0.8) / 2);
       this.backpack.add(strap);
     }
-    this.backpack.position.set(0, torsoLen * 0.55, kind === 'jacinta' ? -0.3 : -torsoR * 0.8 - 0.06);
+    if (style.pack) {
+      // the straps' front halves, running down her chest
+      for (const sd of [-1, 1]) {
+        const fs = mesh(new THREE.BoxGeometry(0.03, 0.17, 0.012), leatherM);
+        fs.position.set(sd * 0.075, 0.02, -packZ + torsoR * 0.8 + 0.006);
+        fs.rotation.z = sd * 0.12;
+        this.backpack.add(fs);
+      }
+    }
+    this.backpack.position.set(0, torsoLen * 0.55, packZ);
     this.backpackSlot = new THREE.Group();
     this.backpackSlot.position.set(0.02, 0.12, 0);
     this.backpack.add(this.backpackSlot);

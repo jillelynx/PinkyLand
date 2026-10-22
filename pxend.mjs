@@ -1,0 +1,10 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+await page.goto(`file://${process.cwd()}/index.html?scene=storybook&fresh=1&chapter=3&quality=high&slow=100000`);
+await page.waitForTimeout(7000);
+await page.evaluate(() => { const sb = window.__game.storybook; sb.state = 'play'; sb.run.scraps = ['map1', 'map2']; sb.showScrap('map2'); for (let k = 0; k < 3; k++) sb.render(0.016); });
+await page.screenshot({ path: '/tmp/claude-0/shots/px_piece.jpg', quality: 85 });
+await page.evaluate(() => { const sb = window.__game.storybook; sb.run.scraps = ['map1', 'map2', 'map3']; Object.assign(sb.p, { x: 7380, y: 440 }); sb.camX = 7450; sb.camY = 360; sb.beginEnding(); for (let i = 0; i < 60 * 8; i++) { sb.stateT += 1 / 60; sb.time += 1 / 60; sb.updateEnding(1 / 60); } sb.render(0.016); });
+await page.screenshot({ path: '/tmp/claude-0/shots/px_end.jpg', quality: 85 });
+await browser.close();

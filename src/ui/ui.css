@@ -41,10 +41,10 @@ button { font-family: var(--round); cursor: pointer; }
 .title-card { position: relative; text-align: center; padding: 40px 56px 36px; }
 .title-logo { font-family: var(--kid); font-size: clamp(56px, 10vw, 120px); color: var(--pink-deep); text-shadow: 0 4px 0 #fff, 0 10px 30px rgba(224, 96, 154, .35); letter-spacing: 2px; margin: 0; transform: rotate(-3deg); }
 .title-sub { font-size: 20px; margin: 6px 0 30px; color: #7a5a8a; }
-.title-pinky { width: 120px; height: 172px; margin: 0 auto 18px; background: linear-gradient(160deg, #fde6eb, #f6c9d3); border-radius: 26px 30px 24px 28px / 24px 22px 30px 26px; box-shadow: inset -8px -10px 18px rgba(220, 120, 150, .35), inset 8px 10px 18px rgba(255,255,255,.7), var(--shadow); position: relative; animation: bob 2.6s ease-in-out infinite; }
-.title-pinky::before, .title-pinky::after { content: ""; position: absolute; top: 36px; width: 15px; height: 19px; background: #3366cc; border-radius: 50%; }
-.title-pinky::before { left: 34px; } .title-pinky::after { right: 34px; }
-.title-pinky i { position: absolute; left: 47px; top: 60px; width: 27px; height: 19px; border: 7px solid #3366cc; border-top: none; border-radius: 0 0 24px 24px; }
+.title-pinky { width: 120px; height: 172px; margin: 0 auto 18px; background: linear-gradient(160deg, #fbe6df, #efc6bc); border-radius: 26px 30px 24px 28px / 24px 22px 30px 26px; box-shadow: inset -8px -10px 18px rgba(220, 120, 150, .35), inset 8px 10px 18px rgba(255,255,255,.7), var(--shadow); position: relative; animation: bob 2.6s ease-in-out infinite; }
+.title-pinky::before, .title-pinky::after { content: ""; position: absolute; top: 30px; width: 15px; height: 12px; background: radial-gradient(circle at 45% 55%, #1f3f8f 38%, #3366cc 42%); border-radius: 50%; }
+.title-pinky::before { left: 38px; } .title-pinky::after { right: 38px; }
+.title-pinky i { position: absolute; left: 49px; top: 46px; width: 22px; height: 12px; border: 5px solid #3366cc; border-top: none; border-radius: 0 0 24px 24px; }
 @keyframes bob { 50% { transform: translateY(-10px) rotate(2deg); } }
 .big-btn { display: block; margin: 12px auto; min-width: 260px; padding: 16px 28px; font-size: 22px; font-weight: 700; border: none; border-radius: 999px; background: linear-gradient(180deg, #ff9ec6, #ff6fa8); color: white; box-shadow: 0 6px 0 #d94f8a, var(--shadow); transition: transform .1s; }
 .big-btn:hover { transform: translateY(-2px) scale(1.03); }
@@ -202,3 +202,10 @@ button { font-family: var(--round); cursor: pointer; }
 .test-badge { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; background: rgba(255, 245, 200, .95); color: #6a4a10; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 12px; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 
 .version-note { margin-top: 6px; font-size: 11px; color: #b39cc4; }
+/* the blue marker scribbles running down the real Pinky */
+.title-pinky i::after { content: ""; position: absolute; left: 0; top: 22px; width: 26px; height: 92px; opacity: .7;
+  background:
+    linear-gradient(176deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 2px 0 / 24px 14px no-repeat,
+    linear-gradient(183deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 6px 34px / 20px 12px no-repeat,
+    linear-gradient(178deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 8px 58px / 16px 12px no-repeat,
+    linear-gradient(181deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 7px 80px / 15px 10px no-repeat; }

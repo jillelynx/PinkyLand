@@ -31,7 +31,7 @@ export const LEVEL2 = {
     first: 'At the top of the stairs was a door with a sign on it. Pinky held up his pieces…',
     reveal: { all: 'J – A – C – I – N – T – A. Jacinta! Her name was JACINTA!', some: (n) => `The pieces he found filled in part of the name… (${n} of 3). Maybe there’s more to discover.` },
     last: 'But Jacinta’s room was empty. Through the window, Pinky could see children playing in the park…',
-    next: 'Chapter 3: The Park — coming soon!',
+    next: 'Chapter 3: Jacinta the Explorer is next!',
   },
   ground: [
     { x0: -200, x1: 900, y: G },

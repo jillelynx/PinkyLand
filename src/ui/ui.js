@@ -65,7 +65,7 @@ export class UI {
         <div class="controls-mini hidden"></div>
         <div class="pinky-bubble"><div class="face"><i></i></div><div class="text"></div></div>
       </div>
-      <div class="dialogue hidden"><div class="name"></div><div class="text"></div><div class="choices"></div><div class="next">▸ Space / E / click</div></div>
+      <div class="dialogue hidden"><div class="name"></div><div class="text"></div><div class="choices"></div><div class="next">▸ Space / E / click · Esc to skip</div></div>
       <div class="overlay hidden"><div class="panel"></div></div>
       <div class="fade"></div>
       <div class="chapter-card"><div></div></div>`;
@@ -281,6 +281,8 @@ export class UI {
         show();
       };
       const onKey = (e) => {
+        // Esc leaves the conversation right away
+        if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); skipAll(); return; }
         if (['Space', 'KeyE', 'Enter'].includes(e.code)) {
           e.preventDefault();
           if (lines[i].choices && !typing) pick(sel); else advance();
@@ -292,6 +294,14 @@ export class UI {
         }
       };
       const onClick = (e) => { if (!lines[i].choices) advance(); };
+      // skipping still lets the story keep up (things that happen during the lines still happen),
+      // and any conversations that start right after are skipped too
+      const skipAll = () => {
+        this._skipUntil = performance.now() + 1500;
+        for (let k = i + 1; k < lines.length; k++) { if (lines[k].choices) break; try { lines[k].onShow?.(); } catch (err) { /* ignore */ } }
+        lastChoice = undefined;
+        finish();
+      };
       const finish = () => {
         clearInterval(typeTimer);
         window.removeEventListener('keydown', onKey, true);
@@ -306,6 +316,12 @@ export class UI {
       window.addEventListener('keydown', onKey, true);
       this.dlg.addEventListener('pointerdown', onClick);
       this.game.canvas.addEventListener('pointerdown', onClick);
+      // a conversation that starts just after Esc was pressed is skipped as well
+      if (this._skipUntil && performance.now() < this._skipUntil) {
+        for (let k = 0; k < lines.length; k++) { if (lines[k].choices) break; try { lines[k].onShow?.(); } catch (err) { /* ignore */ } }
+        finish();
+        return;
+      }
       show();
     });
   }

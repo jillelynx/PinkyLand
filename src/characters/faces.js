@@ -130,67 +130,146 @@ export function humanFaceTexture({ skin, eyes = '#2a1a10', mood = 'happy', blink
  * When the real photo of Pinky arrives, replace this with the real face.
  * `variant` makes slightly different faces for Pinky's friends.
  */
-export function pillowFaceTexture({ variant = 0, mood = 'happy', blink = false, ink = '#3366cc' } = {}) {
-  if (variant === 0) return pinkyRealFace({ mood, blink, ink });
+export function pillowFaceTexture({ variant = 0, mood = 'happy', blink = false, ink = '#3366cc', plain = false } = {}) {
+  if (variant === 0) return pinkyRealFace({ mood, blink, ink, plain });
   return pillowFaceVariant({ variant, mood, blink, ink });
 }
 
-// Pinky's real face, traced from the drawing Jacinta's family shared:
-// two chunky blue marker eyes and a U-shaped smile.
-function pinkyRealFace({ mood, blink, ink }) {
-  const key = ['pinky-real', mood, blink, ink].join('|');
+// Pinky's real face, copied from the photo of the original pillow:
+// a small blue-marker face up top (two oval eyes with dark centres and a little
+// U smile), and a column of blue marker scribbles running down the middle.
+// The worn, wrinkly satin is painted in softly too.
+function pinkyRealFace({ mood, blink, ink, plain }) {
+  const key = ['pinky-real2', mood, blink, ink, plain].join('|');
   if (cache.has(key)) return cache.get(key);
-  // portrait canvas matching Pinky's shape (0.62 wide x 0.9 tall)
   const W = 512, H = 744;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const g = c.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, W, H);
-  // the face is small and sits in the top third of the pillow
-  g.translate(256, 250);
-  g.scale(0.66, 0.66);
-  g.translate(-256, -238);
-  g.fillStyle = ink; g.strokeStyle = ink;
+  if (plain) { g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H); } else g.drawImage(pinkyWrinkleCanvas(), 0, 0);
   g.lineCap = 'round'; g.lineJoin = 'round';
-  // marker blob: slightly lumpy filled shape
-  function blob(cx, cy, rx, ry, seed) {
-    g.beginPath();
-    for (let i = 0; i <= 40; i++) {
-      const a = (i / 40) * Math.PI * 2;
-      const k = 1 + Math.sin(a * 3 + seed) * 0.05 + Math.sin(a * 5 + seed * 2) * 0.03;
-      const x = cx + Math.cos(a) * rx * k, y = cy + Math.sin(a) * ry * k;
-      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  const inkDark = plain ? ink : '#1f3f8f';
+  // marker scribbles down the middle (a little right of centre, like the real one)
+  const r = seeded(7);
+  const scrib = (cx, cy, w, rows, alpha, lw) => {
+    g.save();
+    g.globalAlpha = alpha;
+    g.strokeStyle = ink; g.lineWidth = lw;
+    for (let k = 0; k < rows; k++) {
+      g.beginPath();
+      const y0 = cy + k * (lw * 0.9) + (r() - 0.5) * 3;
+      let x = cx - w / 2 + (r() - 0.5) * 10;
+      g.moveTo(x, y0);
+      while (x < cx + w / 2) { x += 8 + r() * 10; g.lineTo(x, y0 + (r() - 0.5) * 7); }
+      g.stroke();
     }
-    g.fill();
+    g.restore();
+  };
+  if (!plain) {
+  scrib(262, 248, 96, 3, 0.85, 7);
+  scrib(268, 352, 40, 1, 0.4, 4);
+  scrib(286, 412, 86, 3, 0.8, 7);
+  scrib(296, 525, 80, 2, 0.6, 6);
+  scrib(292, 588, 54, 3, 0.55, 7);
+  scrib(286, 640, 50, 2, 0.45, 6);
   }
-  // positions follow the drawing (scaled into a 512 square, centered)
-  const lx = 145, rx = 367, ey = 185;
-  if (blink) {
-    g.lineWidth = 34;
-    for (const x of [lx, rx]) { g.beginPath(); g.moveTo(x - 36, ey + 6); g.quadraticCurveTo(x, ey + 30, x + 36, ey + 6); g.stroke(); }
-  } else {
-    blob(lx, ey, 40, 48, 1.3);
-    blob(rx, ey - 4, 38, 46, 4.1);
-    // the right eye in the drawing has a second overlapping stroke
-    blob(rx + 2, ey + 12, 34, 38, 2.2);
-  }
-  // U-shaped smile: two short sides and a rounded bottom
-  g.lineWidth = 50;
+  // the face, small and high up
+  const fx = 252, ey = 148;
+  const eye = (x, y, tilt) => {
+    if (blink) {
+      g.strokeStyle = ink; g.lineWidth = 9;
+      g.beginPath(); g.moveTo(x - 20, y + 2); g.quadraticCurveTo(x, y + 16, x + 20, y + 2); g.stroke();
+      return;
+    }
+    g.fillStyle = ink;
+    g.beginPath(); g.ellipse(x, y, 21, 17, tilt, 0, Math.PI * 2); g.fill();
+    g.fillStyle = inkDark;
+    g.beginPath(); g.ellipse(x - 2, y + 1, 11, 10, tilt, 0, Math.PI * 2); g.fill();
+    // a hint of the marker outline
+    g.strokeStyle = inkDark; g.lineWidth = 3;
+    g.beginPath(); g.ellipse(x, y, 21, 17, tilt, 0, Math.PI * 2); g.stroke();
+  };
+  eye(fx - 46, ey, -0.35);
+  eye(fx + 46, ey - 2, 0.25);
+  g.strokeStyle = ink; g.lineWidth = 10;
   g.beginPath();
   if (mood === 'sad') {
-    g.moveTo(196, 345); g.lineTo(200, 305); g.quadraticCurveTo(258, 268, 300, 300); g.lineTo(306, 345);
+    g.moveTo(fx - 26, 222); g.quadraticCurveTo(fx, 188, fx + 26, 222);
   } else {
-    g.moveTo(198, 258);
-    g.lineTo(200, 284);
-    g.quadraticCurveTo(204, 316, 250, 314);
-    g.quadraticCurveTo(298, 314, 300, 284);
-    g.lineTo(302, 258);
+    g.moveTo(fx - 30, 186);
+    g.quadraticCurveTo(fx - 28, 214, fx, 214);
+    g.quadraticCurveTo(fx + 28, 214, fx + 30, 184);
   }
   g.stroke();
   const t = tex(c);
   cache.set(key, t);
   return t;
+}
+
+function seeded(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+// Soft wrinkles and a few worn, loved-on smudges (white = Pinky's own colour)
+let wrinkleCanvas = null;
+export function pinkyWrinkleCanvas() {
+  if (wrinkleCanvas) return wrinkleCanvas;
+  const W = 512, H = 744;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  const r = seeded(3);
+  // smudges
+  for (let i = 0; i < 14; i++) {
+    const x = r() * W, y = 120 + r() * (H - 160), rad = 30 + r() * 70;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, `rgba(150,120,105,${0.05 + r() * 0.06})`);
+    gr.addColorStop(1, 'rgba(150,120,105,0)');
+    g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  // wrinkles: long soft creases, mostly radiating from the corners
+  g.lineCap = 'round';
+  for (let i = 0; i < 46; i++) {
+    const corner = i % 4;
+    const sx = corner % 2 ? W - r() * 60 : r() * 60;
+    const sy = corner < 2 ? r() * 80 : H - r() * 80;
+    const len = 80 + r() * 220;
+    const ang = Math.atan2(H / 2 - sy, W / 2 - sx) + (r() - 0.5) * 0.9;
+    const ex = sx + Math.cos(ang) * len, ey = sy + Math.sin(ang) * len;
+    const mx = (sx + ex) / 2 + (r() - 0.5) * 40, my = (sy + ey) / 2 + (r() - 0.5) * 40;
+    g.strokeStyle = `rgba(140,105,95,${0.035 + r() * 0.04})`; g.lineWidth = 8 + r() * 10;
+    g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(mx, my, ex, ey); g.stroke();
+    g.strokeStyle = `rgba(255,255,255,${0.2 + r() * 0.2})`; g.lineWidth = 4 + r() * 5;
+    g.beginPath(); g.moveTo(sx + 5, sy + 4); g.quadraticCurveTo(mx + 5, my + 4, ex + 5, ey + 4); g.stroke();
+  }
+  // a few loose crinkles in the middle
+  for (let i = 0; i < 20; i++) {
+    const x = 60 + r() * (W - 120), y = 80 + r() * (H - 160), len = 30 + r() * 80, a = r() * Math.PI;
+    g.strokeStyle = `rgba(140,105,95,${0.05 + r() * 0.06})`; g.lineWidth = 2 + r() * 3;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 + 10, y + Math.sin(a) * len * 0.5, x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
+  }
+  wrinkleCanvas = c;
+  return c;
+}
+
+let wrinkleTexture = null, wrinkleBump = null;
+export function pinkyWrinkleTexture(bump = false) {
+  if (bump) {
+    // a blurred copy makes soft folds instead of sharp scratches
+    if (!wrinkleBump) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 372;
+      const g = c.getContext('2d');
+      g.filter = 'blur(3px)';
+      g.drawImage(pinkyWrinkleCanvas(), 0, 0, 256, 372);
+      wrinkleBump = new THREE.CanvasTexture(c);
+    }
+    return wrinkleBump;
+  }
+  if (!wrinkleTexture) wrinkleTexture = tex(pinkyWrinkleCanvas());
+  return wrinkleTexture;
 }
 
 function pillowFaceVariant({ variant, mood, blink, ink }) {

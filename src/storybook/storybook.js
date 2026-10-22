@@ -13,10 +13,12 @@ import {
 } from './world25d.js';
 import { LEVEL1 } from './level1.js';
 import { LEVEL2 } from './level2.js';
+import { LEVEL3 } from './level3.js';
+import { PixelJungle, drawMapPicture } from './pixelJungle.js';
 import { makeHouseBackdrop, makeParallax, nameScrapTexture, drawNamePiece, drawNameTag } from './world25dHouse.js';
 
 const SAVE_KEY = 'pinky-storybook-v1';
-export const LEVELS = [LEVEL1, LEVEL2];
+export const LEVELS = [LEVEL1, LEVEL2, LEVEL3];
 
 // movement tuning (game pixels per second)
 const PH = {
@@ -131,6 +133,8 @@ export class Storybook {
   start(levelIndex = 0, resume = true) {
     const L = LEVELS[levelIndex] || LEVELS[0];
     this.level = L;
+    this.ph = { ...PH, ...(L.physics || {}) };
+    if (this.pix) { this.pix.dispose(); this.pix = null; }
     const cp = resume && this.save.cp && this.save.cp.level === L.id ? this.save.cp : null;
     this._cap1 = this._cap2 = this._birthBurst = this._end1 = this._end2 = this._end3 = this._end4 = false;
     this._secretTip = false;
@@ -149,13 +153,42 @@ export class Storybook {
     this.pinky.root.scale.setScalar(this.state === 'birth' ? 0.001 : 0.95);
     this.swirl.visible = this.state === 'birth';
     if (this.state === 'play') {
-      if (cp) this.caption('Pinky kept going. Somewhere, someone was waiting…', 4);
+      if (cp) this.caption(L.resumeCaption || 'Pinky kept going. Somewhere, someone was waiting…', 4);
       else { this.caption(L.openCaption || '', 6); this.game.ui.chapter?.(L.title, L.subtitle, 3.5); this.tip('Press Space again in the air to double jump!', 4); }
     }
   }
 
+  // Chapter 3 is drawn in pixel art on its own canvas; the 3D scene only keeps
+  // simple placeholders so the shared game rules keep working.
+  buildPixelScene() {
+    const L = this.level;
+    this.scene = new THREE.Scene();
+    const dummy = (x = 0, y = 440) => {
+      const o = new THREE.Object3D();
+      o.position.set(toX(x), toY(y), 0);
+      o.userData = { star: new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial()), heart: new THREE.Object3D(), body: new THREE.Object3D(), paper: new THREE.Object3D(), inner: new THREE.Object3D(), t: 0 };
+      return o;
+    };
+    this.backdrop = new THREE.Group(); this.backdrop.userData = {};
+    this.parallax = []; this.nameSign = null;
+    for (const b of L.bouncy) b.mesh = dummy(b.x, b.y);
+    this.movers = L.movers.map((m) => ({ ...m, mesh: dummy(), cx: m.x, cy: m.y, px: m.x, py: m.y }));
+    this.bunnies = L.bunnies.map((b) => ({ x: b.x, home: b.x, range: b.range, dir: 1, state: 'walk', t: Math.random() * 5, mesh: dummy(), y: b.y || 440, kind: b.kind }));
+    this.checkpoints = L.checkpoints.map((c, i) => ({ ...c, mesh: dummy(c.x, c.y || 440), on: i <= this.run.cp }));
+    this.goal = dummy(L.goal.x);
+    this.starObjs = L.stars.map((s, i) => (this.run.stars.includes(i) ? null : dummy(...s)));
+    this.scrapObjs = L.scraps.map((sc) => (this.run.scraps.includes(sc.id) ? null : dummy(sc.x, sc.y)));
+    this.bushMat = { opacity: 1 };
+    this.motes = new THREE.Object3D();
+    this.pinky = new Pillow({ scale: 0.95, name: 'Pinky' }); // rides along in Jacinta's backpack
+    this.swirl = new THREE.Object3D();
+    this.particles = [];
+    this.pix = new PixelJungle(L);
+  }
+
   buildScene() {
     const L = this.level;
+    if (L.theme === 'pixel') return this.buildPixelScene();
     const scene = new THREE.Scene();
     this.scene = scene;
     const rand = rng(7);
@@ -405,31 +438,31 @@ export class Storybook {
     if (inp.hit('KeyR')) { this.respawn(false); return; }
 
     // horizontal movement with acceleration, braking and air control
-    const max = (running ? PH.run : PH.walk) * Math.abs(dir);
-    const target = dir * (running ? PH.run : PH.walk);
-    const acc = p.grounded ? (Math.sign(target) !== Math.sign(p.vx) && p.vx !== 0 ? PH.decel : PH.accel) : PH.airAccel;
+    const max = (running ? this.ph.run : this.ph.walk) * Math.abs(dir);
+    const target = dir * (running ? this.ph.run : this.ph.walk);
+    const acc = p.grounded ? (Math.sign(target) !== Math.sign(p.vx) && p.vx !== 0 ? this.ph.decel : this.ph.accel) : this.ph.airAccel;
     if (Math.abs(dir) > 0.05) {
       p.vx += Math.sign(target - p.vx) * Math.min(Math.abs(target - p.vx), acc * dt);
       p.facing = dir > 0 ? 1 : -1;
     } else {
-      const dec = (p.grounded ? PH.decel : PH.airAccel * 0.4) * dt;
+      const dec = (p.grounded ? this.ph.decel : this.ph.airAccel * 0.4) * dt;
       p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec;
     }
-    if (Math.abs(p.vx) > PH.run) p.vx = Math.sign(p.vx) * PH.run;
+    if (Math.abs(p.vx) > this.ph.run) p.vx = Math.sign(p.vx) * this.ph.run;
     void max;
 
     // jumping (coyote time + jump buffer + variable height)
-    if (jumpHit) p.buffer = PH.buffer; else p.buffer -= dt;
-    if (p.grounded) p.coyote = PH.coyote; else p.coyote -= dt;
+    if (jumpHit) p.buffer = this.ph.buffer; else p.buffer -= dt;
+    if (p.grounded) p.coyote = this.ph.coyote; else p.coyote -= dt;
     if (p.buffer > 0 && p.coyote > 0) {
-      p.vy = -PH.jump - Math.abs(p.vx) * 0.12; // a running start jumps a bit higher
+      p.vy = -this.ph.jump - Math.abs(p.vx) * 0.12; // a running start jumps a bit higher
       p.grounded = false; p.coyote = 0; p.buffer = 0; p.standing = null;
       this.audio.jump(1);
       this.pinky.land(0.25);
     }
     // double jump: press jump again while in the air (once, until you land)
     if (p.buffer > 0 && !p.grounded && p.coyote <= 0 && !p.doubled) {
-      p.vy = -PH.doubleJump;
+      p.vy = -this.ph.doubleJump;
       p.doubled = true; p.buffer = 0;
       p.spin = 1; // a happy twirl
       this.audio.jump(2);
@@ -437,8 +470,8 @@ export class Storybook {
       this.pinky.land(0.3);
     }
     if (p.grounded) p.doubled = false;
-    if (!jumpHeld && p.vy < -200) p.vy *= Math.pow(PH.jumpCut, dt * 10); // let go early = smaller hop
-    p.vy = Math.min(PH.maxFall, p.vy + PH.gravity * dt * (p.vy > 0 ? 1.15 : 1));
+    if (!jumpHeld && p.vy < -200) p.vy *= Math.pow(this.ph.jumpCut, dt * 10); // let go early = smaller hop
+    p.vy = Math.min(this.ph.maxFall, p.vy + this.ph.gravity * dt * (p.vy > 0 ? 1.15 : 1));
 
     // ride moving platforms
     if (p.standing && p.standing.mover) {
@@ -448,12 +481,12 @@ export class Storybook {
     }
 
     // move & collide horizontally
-    const hw = PH.w / 2;
+    const hw = this.ph.w / 2;
     p.x += p.vx * dt;
     for (const s of this.solids()) {
-      if (p.y > s.y + 0.5 && p.y - PH.h < s.y + s.h && p.x + hw > s.x && p.x - hw < s.x + s.w) {
+      if (p.y > s.y + 0.5 && p.y - this.ph.h < s.y + s.h && p.x + hw > s.x && p.x - hw < s.x + s.w) {
         // small steps (like stairs) are climbed automatically
-        if (p.grounded && p.y - s.y <= PH.stepUp) {
+        if (p.grounded && p.y - s.y <= this.ph.stepUp) {
           p.y = s.y;
           // put the foot properly on the step
           if (p.vx > 0) p.x = Math.max(p.x, s.x - hw + 5); else if (p.vx < 0) p.x = Math.min(p.x, s.x + s.w + hw - 5);
@@ -473,9 +506,9 @@ export class Storybook {
     p.grounded = false;
     p.standing = null;
     for (const s of this.solids()) {
-      if (p.x + hw > s.x + 2 && p.x - hw < s.x + s.w - 2 && p.y > s.y && p.y - PH.h < s.y + s.h) {
+      if (p.x + hw > s.x + 2 && p.x - hw < s.x + s.w - 2 && p.y > s.y && p.y - this.ph.h < s.y + s.h) {
         if (p.vy >= 0 && prevY <= s.y + 6) { p.y = s.y; p.vy = 0; p.grounded = true; p.standing = s; }
-        else if (p.vy < 0) { p.y = s.y + s.h + PH.h; p.vy = 0; }
+        else if (p.vy < 0) { p.y = s.y + s.h + this.ph.h; p.vy = 0; }
       }
     }
     if (p.vy >= 0) {
@@ -519,20 +552,20 @@ export class Storybook {
     // hazards
     p.inv = Math.max(0, p.inv - dt);
     for (const h of L.hazards) {
-      if (p.x + hw - 4 > h.x && p.x - hw + 4 < h.x + h.w && p.y > h.y + 4 && p.y - PH.h < h.y + h.h) this.hurt(p.x < h.x + h.w / 2 ? -1 : 1);
+      if (p.x + hw - 4 > h.x && p.x - hw + 4 < h.x + h.w && p.y > h.y + 4 && p.y - this.ph.h < h.y + h.h) this.hurt(p.x < h.x + h.w / 2 ? -1 : 1);
     }
     // dust bunnies
     for (const b of this.bunnies) {
       if (b.state !== 'walk') continue;
       const bw = 40, bh = 38;
-      if (p.x + hw > b.x - bw / 2 && p.x - hw < b.x + bw / 2 && p.y > b.y - bh && p.y - PH.h < b.y) {
+      if (p.x + hw > b.x - bw / 2 && p.x - hw < b.x + bw / 2 && p.y > b.y - bh && p.y - this.ph.h < b.y) {
         if (p.vy > 0 && prevY <= b.y - bh + 12) {
-          p.vy = -(jumpHeld ? PH.bunnyBounceHeld : PH.bunnyBounce);
+          p.vy = -(jumpHeld ? this.ph.bunnyBounceHeld : this.ph.bunnyBounce);
           b.state = 'puffed'; b.t = 0;
           this.audio.stomp();
           this.burst(b.x, b.y - 20, '#d8d0e8', 18);
           this.pinky.land(0.6);
-          if (!this._stompTipShown) { this._stompTipShown = true; this.tip(b.kind === 'snail' ? 'Boing! The snail giggled and slid off to nap. 🐌' : 'Achoo! The dust bunny sneezed and rolled away. 🙂', 3); }
+          if (!this._stompTipShown) { this._stompTipShown = true; this.tip(L.stompTip || (b.kind === 'snail' ? 'Boing! The snail giggled and slid off to nap. 🐌' : 'Achoo! The dust bunny sneezed and rolled away. 🙂'), 3); }
         } else this.hurt(p.x < b.x ? -1 : 1);
       }
     }
@@ -541,7 +574,7 @@ export class Storybook {
     this.starObjs.forEach((s, i) => {
       if (!s) return;
       const [sx, sy] = L.stars[i];
-      if (Math.abs(sx - p.x) < 26 && sy > p.y - PH.h - 18 && sy < p.y + 14) {
+      if (Math.abs(sx - p.x) < 26 && sy > p.y - this.ph.h - 18 && sy < p.y + 14) {
         this.scene.remove(s);
         this.starObjs[i] = null;
         this.run.stars.push(i);
@@ -554,7 +587,7 @@ export class Storybook {
     this.scrapObjs.forEach((g, i) => {
       if (!g) return;
       const sc = L.scraps[i];
-      if (Math.abs(sc.x - p.x) < 30 && sc.y > p.y - PH.h - 24 && sc.y < p.y + 20) {
+      if (Math.abs(sc.x - p.x) < 30 && sc.y > p.y - this.ph.h - 24 && sc.y < p.y + 20) {
         this.scene.remove(g);
         this.scrapObjs[i] = null;
         this.run.scraps.push(sc.id);
@@ -676,7 +709,7 @@ export class Storybook {
       this.updateHUD();
       this.state = 'play';
       this.game.ui.fade(false);
-      if (outOfHearts) this.caption('Pinky took a deep breath, fluffed himself up, and tried again.', 3.5);
+      if (outOfHearts) this.caption(L.retryCaption || 'Pinky took a deep breath, fluffed himself up, and tried again.', 3.5);
     }, 650);
   }
 
@@ -684,7 +717,7 @@ export class Storybook {
     const c = this.revealEl.querySelector('canvas');
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
-    if (this.level.scrapStyle === 'name') drawNamePiece(g, id, c.width, c.height, true); else drawScrap(g, id, c.width, c.height);
+    if (this.level.scrapStyle === 'name') drawNamePiece(g, id, c.width, c.height, true); else if (this.level.scrapStyle === 'map') drawMapPicture(g, c.width, c.height, [id], id); else drawScrap(g, id, c.width, c.height);
     const n = this.run.scraps.length;
     const lines = this.level.scrapLines || {
       1: `A scrap of a drawing… ${SCRAP_NAMES[id]}. Pinky held it close. It felt familiar.`,
@@ -736,6 +769,13 @@ export class Storybook {
     g.clearRect(0, 0, W, H);
     const n = this.run.scraps.length;
     const E = this.level.ending;
+    if (this.level.scrapStyle === 'map') {
+      // the torn map pieces fit back together
+      drawMapPicture(g, W, H, this.run.scraps);
+      this.revealEl.querySelector('.sb-reveal-text').textContent = n === 3 ? E.reveal.all : E.reveal.some(n);
+      this.revealEl.classList.remove('hidden');
+      return;
+    }
     if (this.level.scrapStyle === 'name') {
       // the torn pieces fit back into the door sign
       drawNameTag(g, W, H, this.run.scraps);
@@ -840,6 +880,7 @@ export class Storybook {
   }
 
   burst(x, y, color, n = 12) {
+    if (this.pix) { this.pix.burst(x, y, color, n); return; }
     const mat = new THREE.SpriteMaterial({ map: glowTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     for (let i = 0; i < n; i++) {
       const s = new THREE.Sprite(mat.clone());
@@ -882,6 +923,7 @@ export class Storybook {
     // never let Pinky drop out of view at the bottom or top of the screen
     this.camY = Math.max(this.camY, p.y - 105);
     this.camY = Math.min(this.camY, p.y + 60);
+    if (this.pix) { this.renderPixel(dt); return; }
     let cx = toX(this.camX), cy = toY(this.camY);
     const prog = Math.min(1, Math.max(0, p.x / L.width));
     if (this.state === 'ending' && L.ending?.pan !== false) {
@@ -954,7 +996,33 @@ export class Storybook {
     this.engine.render();
   }
 
+  renderPixel(dt) {
+    const L = this.level;
+    const sb = L.secretBush;
+    const p = this.p;
+    const behind = p.x > sb.x - 10 && p.x < sb.x + sb.w + 10;
+    this.bushMat.opacity += ((behind ? 0.35 : 1) - this.bushMat.opacity) * Math.min(1, dt * 6);
+    if (behind && !this._secretTip) { this._secretTip = true; this.tip('A secret hiding place!', 2.5); }
+    this.audio.state.night = 0;
+    this.pix.draw(this, dt);
+    if (this.thought) {
+      this.thought.t -= dt;
+      const [sx, sy] = this.pix.toScreen(p.x + 10, p.y - this.ph.h - 10);
+      const tc = this.thoughtCanvas;
+      tc.style.left = sx - 20 + 'px';
+      tc.style.top = sy - 90 + 'px';
+      const g = tc.getContext('2d');
+      g.clearRect(0, 0, tc.width, tc.height);
+      g.save(); g.scale(1.6, 1.6);
+      drawThought(g, 6, 66, this.thought.icon, this.time, 1);
+      g.restore();
+      tc.style.opacity = this.thought.t > 0 ? 1 : 0;
+      if (this.thought.t < -0.5) this.thought = null;
+    }
+  }
+
   dispose() {
+    if (this.pix) this.pix.dispose();
     this.ui.remove();
   }
 }

@@ -60,7 +60,8 @@ export class Player {
     this.model.root.position.set(0, 0, 0);
     this.model.root.rotation.set(0, 0, 0);
     this.stats = AVATAR_STATS[key];
-    if (this.model.backpack) this.model.backpack.visible = key === 'jacintaPack';
+    if (this.model.showPinkyInPack) this.model.showPinkyInPack(key === 'jacintaPack');
+    else if (this.model.backpack) this.model.backpack.visible = key === 'jacintaPack';
     this._applyCape();
   }
 

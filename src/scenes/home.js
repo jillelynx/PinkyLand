@@ -20,7 +20,7 @@ const HOUSE = { x0: -6, x1: 6, z0: -5, z1: 5 };
 const ROOMS = {
   living: { x0: -6, x1: 1, z0: -1, z1: 5, wall: '#fff1dc', label: 'Living Room', icon: '🛋️' },
   kitchen: { x0: 1, x1: 6, z0: -1, z1: 5, wall: '#e3f5ec', label: 'Kitchen', icon: '🍳' },
-  bedroom: { x0: -6, x1: 1, z0: -5, z1: -1, wall: '#ffe1ee', label: 'Jacinta’s Room', icon: '🛏️' },
+  bedroom: { x0: -6, x1: 1, z0: -5, z1: -1, wall: '#93a161', label: 'Jacinta’s Room', icon: '🛏️' },
   bath: { x0: 1, x1: 6, z0: -5, z1: -1, wall: '#dcefff', label: 'Bathroom', icon: '🛁' },
 };
 const FRONT_DOOR = { x: -0.6, z: 5 };
@@ -104,6 +104,13 @@ function wallpaperTex(base, dot, kind) {
       else if (kind === 'dots') { g.beginPath(); g.arc(cx, cy, 4, 0, Math.PI * 2); g.fill(); }
       else if (kind === 'stripes') { g.fillRect(x * 64, 0, 10, h); }
     }
+    if (kind === 'paint') {
+      // plain painted wall: just a soft roller texture
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      const r = makeRandom(9);
+      for (let i = 0; i < 900; i++) { g.fillStyle = r() < 0.5 ? dot : '#b3bf80'; g.globalAlpha = 0.06 + r() * 0.08; g.fillRect(r() * w, r() * h, 2 + r() * 5, 1 + r() * 3); }
+      g.globalAlpha = 1;
+    }
   }, [6, 3]);
 }
 function rugTex(c1, c2, c3) {
@@ -118,6 +125,93 @@ function blobShadowTex() {
     gr.addColorStop(0, 'rgba(40,20,30,0.45)'); gr.addColorStop(0.6, 'rgba(40,20,30,0.18)'); gr.addColorStop(1, 'rgba(40,20,30,0)');
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   });
+}
+
+// ---- pictures on Jacinta's wall (all hand-drawn here, in code)
+function paperCanvas(w, h, bg = '#fbfaf6') {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  return [c, g];
+}
+// a big red dragon perched on dark rocks, wings spread
+function dragonPosterCanvas() {
+  const [c, g] = paperCanvas(400, 292);
+  const bg = g.createLinearGradient(0, 0, 0, 292);
+  bg.addColorStop(0, '#3a2a2a'); bg.addColorStop(0.6, '#5a3b2b'); bg.addColorStop(1, '#241a18');
+  g.fillStyle = bg; g.fillRect(0, 0, 400, 292);
+  // rocks
+  g.fillStyle = '#2b2422';
+  g.beginPath(); g.moveTo(0, 292); g.lineTo(0, 230); g.lineTo(80, 205); g.lineTo(170, 220); g.lineTo(250, 200); g.lineTo(330, 225); g.lineTo(400, 210); g.lineTo(400, 292); g.fill();
+  // wings (behind)
+  const wing = (sx, dir) => {
+    g.fillStyle = '#9b1f1a';
+    g.beginPath(); g.moveTo(sx, 120);
+    g.lineTo(sx + dir * 70, 30); g.lineTo(sx + dir * 150, 20); g.lineTo(sx + dir * 175, 60);
+    g.quadraticCurveTo(sx + dir * 140, 70, sx + dir * 150, 110);
+    g.quadraticCurveTo(sx + dir * 110, 105, sx + dir * 105, 140);
+    g.quadraticCurveTo(sx + dir * 70, 130, sx + dir * 50, 160); g.closePath(); g.fill();
+    g.strokeStyle = '#5e0f0c'; g.lineWidth = 3;
+    for (const [x, y] of [[70, 30], [150, 20], [175, 60]]) { g.beginPath(); g.moveTo(sx, 120); g.lineTo(sx + dir * x, y); g.stroke(); }
+  };
+  wing(200, 1); wing(170, -1);
+  // body + tail
+  g.fillStyle = '#c4362a';
+  g.beginPath(); g.ellipse(190, 175, 60, 38, -0.2, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.moveTo(140, 190); g.quadraticCurveTo(70, 230, 40, 200); g.quadraticCurveTo(80, 215, 135, 175); g.fill();
+  // neck and head
+  g.beginPath(); g.moveTo(215, 150); g.quadraticCurveTo(250, 100, 235, 70); g.lineTo(255, 62); g.quadraticCurveTo(270, 110, 240, 165); g.fill();
+  g.beginPath(); g.ellipse(250, 62, 22, 14, -0.3, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.moveTo(262, 56); g.lineTo(292, 62); g.lineTo(266, 72); g.fill(); // snout
+  g.fillStyle = '#e9d39a';
+  for (const [x, y, a] of [[240, 48, -0.6], [252, 46, -0.3]]) { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.moveTo(-3, 0); g.lineTo(0, -18); g.lineTo(3, 0); g.fill(); g.restore(); }
+  g.fillStyle = '#ffd34d'; g.beginPath(); g.arc(256, 58, 3, 0, Math.PI * 2); g.fill();
+  // belly scales and legs
+  g.fillStyle = '#e07a4a'; g.beginPath(); g.ellipse(205, 190, 32, 16, -0.2, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#a82a20';
+  for (const x of [165, 215]) { g.beginPath(); g.ellipse(x, 212, 12, 18, 0, 0, Math.PI * 2); g.fill(); }
+  // a little glow
+  const gl = g.createRadialGradient(330, 60, 0, 330, 60, 120); gl.addColorStop(0, 'rgba(255,170,90,0.35)'); gl.addColorStop(1, 'rgba(255,170,90,0)');
+  g.fillStyle = gl; g.fillRect(0, 0, 400, 292);
+  return c;
+}
+// Jacinta's drawing of cats saying "Meow"
+function catDrawingCanvas() {
+  const [c, g] = paperCanvas(160, 206);
+  g.lineCap = 'round'; g.lineWidth = 3;
+  const cat = (x, y, s, col) => {
+    g.strokeStyle = col;
+    g.beginPath(); g.arc(x, y, 14 * s, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo(x - 12 * s, y - 7 * s); g.lineTo(x - 10 * s, y - 22 * s); g.lineTo(x - 2 * s, y - 13 * s); g.moveTo(x + 12 * s, y - 7 * s); g.lineTo(x + 10 * s, y - 22 * s); g.lineTo(x + 2 * s, y - 13 * s); g.stroke();
+    g.fillStyle = col; for (const sx of [-1, 1]) { g.beginPath(); g.arc(x + sx * 5 * s, y - 2 * s, 1.8 * s, 0, 7); g.fill(); }
+    g.beginPath(); g.moveTo(x - 3 * s, y + 5 * s); g.quadraticCurveTo(x, y + 8 * s, x + 3 * s, y + 5 * s); g.stroke();
+  };
+  cat(46, 50, 1, '#ff4fa0'); cat(118, 44, 0.9, '#ff4fa0'); cat(110, 150, 1.1, '#ff4fa0'); cat(40, 160, 0.8, '#ff7ab8');
+  g.fillStyle = '#ff4fa0'; g.font = 'bold 22px "Comic Sans MS", "Chalkboard SE", sans-serif';
+  g.save(); g.translate(40, 105); g.rotate(-0.15); g.fillText('Meow', 0, 0); g.restore();
+  g.fillStyle = '#ff9a3c'; g.font = 'bold 18px "Comic Sans MS", sans-serif'; g.fillText('MEOW', 70, 120);
+  g.strokeStyle = '#ffd34d'; g.lineWidth = 2;
+  for (const [x, y] of [[20, 20], [140, 100], [25, 120], [140, 190]]) { g.beginPath(); g.moveTo(x - 6, y); g.lineTo(x + 6, y); g.moveTo(x, y - 6); g.lineTo(x, y + 6); g.stroke(); }
+  return c;
+}
+// a school flyer for Glow Dance Day
+function flyerCanvas() {
+  const [c, g] = paperCanvas(160, 124);
+  g.fillStyle = '#222'; g.fillRect(10, 40, 140, 34);
+  g.fillStyle = '#7dff9a'; g.font = 'bold 19px sans-serif'; g.textAlign = 'center'; g.fillText('Glow Dance Day!', 80, 63);
+  g.fillStyle = '#ff6fae'; g.font = 'bold 14px sans-serif'; g.fillText('Friday', 80, 96);
+  g.fillStyle = '#ffd34d'; g.beginPath(); g.arc(28, 20, 10, 0, 7); g.fill();
+  g.fillStyle = '#66c2ff'; g.beginPath(); g.arc(132, 20, 8, 0, 7); g.fill();
+  return c;
+}
+// a page from school with pencil writing
+function pencilPageCanvas() {
+  const [c, g] = paperCanvas(120, 150);
+  g.strokeStyle = 'rgba(80,80,90,0.55)'; g.lineWidth = 1.4;
+  g.fillStyle = '#555'; g.font = '12px sans-serif'; g.fillText('100%  ★', 60, 18);
+  for (let y = 34; y < 140; y += 14) { g.beginPath(); g.moveTo(10, y); for (let x = 10; x < 100 + (y % 28); x += 6) g.lineTo(x, y + Math.sin(x * 0.7 + y) * 2); g.stroke(); }
+  return c;
 }
 
 export class HomeLevel extends Level {
@@ -187,13 +281,13 @@ export class HomeLevel extends Level {
     const floors = {
       living: new THREE.MeshStandardMaterial({ map: woodTex(), roughness: 0.6 }),
       kitchen: new THREE.MeshStandardMaterial({ map: tileTex('#f7f3ea', '#cde9dc', 8), roughness: 0.45 }),
-      bedroom: new THREE.MeshStandardMaterial({ map: woodTex(), color: '#fff0e6', roughness: 0.65 }),
+      bedroom: new THREE.MeshStandardMaterial({ map: woodTex(), color: '#e6c3a5', roughness: 0.6 }),
       bath: new THREE.MeshStandardMaterial({ map: tileTex('#ffffff', '#cfe6fb', 10), roughness: 0.35 }),
     };
     const papers = {
       living: wallpaperTex('#fff1dc', '#f6dcbc', 'stripes'),
       kitchen: wallpaperTex('#e3f5ec', '#cce9db', 'dots'),
-      bedroom: wallpaperTex('#ffe1ee', '#ffc2db', 'stars'),
+      bedroom: wallpaperTex('#9aa866', '#7f8d4e', 'paint'), // Jacinta's real room is painted olive green
       bath: wallpaperTex('#dcefff', '#c6e2fb', 'dots'),
     };
     const ceilMat = new THREE.MeshStandardMaterial({ color: '#fffaf5', roughness: 0.9, side: THREE.DoubleSide });
@@ -201,7 +295,7 @@ export class HomeLevel extends Level {
     const gaps = {
       living: { s: [{ c: FRONT_DOOR.x, w: 1.1, door: true }, { c: -3.8, w: 1.6, sill: 0.8, top: 2.0 }], n: [{ c: -0.6, w: 1.0, door: true }], e: [{ c: 2.0, w: 3.0, top: 2.3 }], w: [{ c: 2.0, w: 1.6, sill: 0.9, top: 2.0 }] },
       kitchen: { w: [{ c: 2.0, w: 3.0, top: 2.3 }], n: [{ c: 2.2, w: 1.0, door: true }], e: [{ c: 1.0, w: 1.4, sill: 1.15, top: 2.05 }], s: [{ c: 3.6, w: 1.4, sill: 0.9, top: 2.0 }] },
-      bedroom: { s: [{ c: -0.6, w: 1.0, door: true }], n: [{ c: -3.4, w: 1.5, sill: 0.85, top: 2.0 }], w: [{ c: -2.6, w: 1.1, sill: 0.9, top: 2.0 }] },
+      bedroom: { s: [{ c: -0.6, w: 1.0, door: true }], n: [{ c: -4.75, w: 1.2, sill: 0.95, top: 2.05, lace: true, lights: true }], w: [{ c: -1.5, w: 0.75, sill: 0.95, top: 2.05, lace: true, rod: 0.25 }] },
       bath: { s: [{ c: 2.2, w: 1.0, door: true }], n: [{ c: 4.7, w: 1.0, sill: 1.4, top: 2.1 }] },
     };
     this.windowSpots = [];
@@ -301,6 +395,14 @@ export class HomeLevel extends Level {
     }
     const sill = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.05, WT + 0.2), f);
     sill.position.set(0, -h / 2 - 0.02, 0); g.add(sill);
+    if (gp.lace) {
+      this._laceWindow(g, w, h, gp, facing, axis);
+      if (axis === 'x') g.position.set(gp.c, gp.sill + h / 2, fixed);
+      else { g.position.set(fixed, gp.sill + h / 2, gp.c); g.rotation.y = Math.PI / 2; }
+      this.scene.add(g);
+      this.windowSpots.push(g.position.clone());
+      return;
+    }
     // curtains
     const curtainMat = mat(['#ffb3cf', '#bfe6ff', '#ffe08a'][Math.floor(Math.abs(fixed * 7 + gp.c) % 3)], { roughness: 0.95 });
     for (const s of [-1, 1]) {
@@ -314,6 +416,59 @@ export class HomeLevel extends Level {
     g.children.slice(-2).forEach((c) => { c.position.z = axis === 'x' ? 0.12 * facing : -0.12 * facing; });
     this.scene.add(g);
     this.windowSpots.push(g.position.clone());
+  }
+
+  // Jacinta's windows: white blinds, rust-coloured lace curtains with little
+  // tassels, and (on the big window) a string of fairy lights.
+  _laceWindow(g, w, h, gp, facing, axis) {
+    const inward = facing; // local +z * inward points into the room
+    if (!this._laceMat) {
+      const lace = canvasTex(128, 256, (c, W, H) => {
+        c.fillStyle = 'rgba(172,72,44,0.85)'; c.fillRect(0, 0, W, H);
+        c.globalCompositeOperation = 'destination-out';
+        for (let y = 6; y < H; y += 16) for (let x = (y / 16) % 2 ? 8 : 0; x < W; x += 16) { c.beginPath(); c.ellipse(x, y, 3.2, 5, 0, 0, Math.PI * 2); c.fill(); }
+        for (let y = 14; y < H; y += 32) for (let x = 0; x < W; x += 32) { c.beginPath(); c.arc(x + 16, y, 7, 0, Math.PI * 2); c.lineWidth = 2; c.strokeStyle = '#000'; c.stroke(); }
+        c.globalCompositeOperation = 'source-over';
+        c.strokeStyle = 'rgba(120,40,22,0.6)'; c.lineWidth = 2;
+        for (let x = 4; x < W; x += 16) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+      }, [3, 4]);
+      this._laceMat = new THREE.MeshStandardMaterial({ map: lace, transparent: true, side: THREE.DoubleSide, roughness: 1, depthWrite: false, alphaTest: 0.05 });
+      this._blindMat = new THREE.MeshStandardMaterial({ map: canvasTex(32, 128, (c, W, H) => { c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H); c.fillStyle = 'rgba(150,140,130,0.45)'; for (let y = 0; y < H; y += 8) c.fillRect(0, y, W, 1.5); }), emissive: '#fff4e0', emissiveIntensity: 0.35, roughness: 0.8, side: THREE.DoubleSide });
+    }
+    // blinds pulled most of the way down, glowing with daylight
+    const blind = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.06, h * 0.72), this._blindMat);
+    blind.position.set(0, h * 0.14, 0.03 * inward);
+    g.add(blind);
+    // curtain rod
+    const rodLen = w + (gp.rod ?? 0.9);
+    const rod = cyl(0.012, 0.012, rodLen, mat('#1a1a1a', { roughness: 0.4 }), 8);
+    rod.rotation.z = Math.PI / 2; rod.position.set(0, h / 2 + 0.2, 0.16 * inward); g.add(rod);
+    for (const sgn of [-1, 1]) { const fin = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), mat('#1a1a1a')); fin.position.set(sgn * rodLen / 2, h / 2 + 0.2, 0.16 * inward); g.add(fin); }
+    // two lace panels, gently gathered (wavy), partly drawn across the window
+    const panelW = w * 0.62, panelH = h + 0.45;
+    const tm = mat('#9c3f22', { roughness: 1 });
+    for (const sgn of [-1, 1]) {
+      const geo = new THREE.PlaneGeometry(panelW, panelH, 16, 1);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 26) * 0.03);
+      geo.computeVertexNormals();
+      const panel = new THREE.Mesh(geo, this._laceMat);
+      panel.position.set(sgn * (w / 2 - panelW / 2 + 0.06), h / 2 + 0.2 - panelH / 2, 0.15 * inward);
+      g.add(panel);
+      // little tassels along the outer edge and the bottom
+      const ox = panel.position.x + sgn * panelW / 2;
+      for (let k = 0; k < 9; k++) { const t = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 4), tm); t.position.set(ox, panel.position.y + panelH / 2 - 0.1 - k * (panelH / 9), panel.position.z); g.add(t); }
+      for (let k = 0; k < 7; k++) { const t = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 4), tm); t.position.set(panel.position.x - panelW / 2 + 0.04 + k * (panelW / 7), panel.position.y - panelH / 2, panel.position.z); g.add(t); }
+    }
+    if (gp.lights) {
+      // fairy lights draped across the window
+      this.fairyMat = this.fairyMat || mat('#fff1b0', { emissive: '#ffd77a', emissiveIntensity: 1.2 });
+      for (let k = 0; k <= 22; k++) {
+        const u = k / 22, x = (u - 0.5) * (w + 0.5), y = h / 2 + 0.07 - Math.sin(u * Math.PI * 3) ** 2 * 0.22;
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), this.fairyMat);
+        b.position.set(x, y, 0.19 * inward); g.add(b);
+      }
+    }
   }
 
   // a soft dark spot under furniture so it sits on the floor
@@ -573,137 +728,352 @@ export class HomeLevel extends Level {
   }
 
   // ---------------------------------------------------------------- bedroom
+  // Modelled on photos of Jacinta's real room: olive-green walls, a twin bed with a
+  // dark headboard and a navy star-and-moon blanket, a black nightstand with a silver
+  // lamp, a whitewashed dresser, pink tie-dye cat shelves on the wall, a fluffy pink
+  // rug, a white cube desk with a dragon poster, drawings and towels, and a white
+  // closet with arched doors.
   buildBedroom() {
     const S = this.scene;
-    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.3, 40), new THREE.MeshStandardMaterial({ map: rugTex('#ffb3cf', '#ffffff', '#ffd6e8'), roughness: 1 }));
-    rug.rotation.x = -Math.PI / 2; rug.position.set(-2.6, 0.02, -3.0); S.add(rug);
-    // bed with a pink comforter, headboard against the west wall
-    const bed = new THREE.Group();
-    bed.add(at(rbox(2.1, 0.32, 1.3, '#f4e7da', 0.04), 0, 0.2, 0));
-    bed.add(at(rbox(2.0, 0.2, 1.24, '#ffffff', 0.08), 0, 0.46, 0)); // mattress
-    const quilt = new THREE.Mesh(new RoundedBoxGeometry(1.45, 0.12, 1.32, 3, 0.05), new THREE.MeshStandardMaterial({ map: canvasTex(128, 128, (g2) => {
-      g2.fillStyle = '#ff9ec4'; g2.fillRect(0, 0, 128, 128);
-      g2.fillStyle = '#ffd1e3';
-      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) g2.fillRect(i * 32, j * 32, 32, 32);
-      g2.fillStyle = '#ffffff';
-      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g2.beginPath(); g2.arc(i * 32 + 16, j * 32 + 16, 4, 0, Math.PI * 2); g2.fill(); }
-    }), roughness: 0.95 }));
-    quilt.castShadow = true;
-    bed.add(at(quilt, 0.3, 0.58, 0));
-    bed.add(at(rbox(0.4, 0.14, 0.9, '#ffffff', 0.07), -0.75, 0.62, 0)); // pillow
-    bed.add(at(rbox(0.12, 1.0, 1.36, '#f4e7da', 0.05), -1.04, 0.5, 0)); // headboard
-    bed.add(at(rbox(0.1, 0.55, 1.36, '#f4e7da', 0.05), 1.04, 0.3, 0)); // footboard
-    // a teddy bear sitting on the pillow
-    const teddy = new THREE.Group();
-    const fur = mat('#c8955f', { roughness: 1 });
-    teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), fur), 0, 0.1, 0));
-    teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.08, 14, 10), fur), 0, 0.25, 0.01));
-    for (const s of [-1, 1]) teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), fur), s * 0.055, 0.32, 0));
-    teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), mat('#f0d2b0')), 0, 0.24, 0.07));
-    for (const s of [-1, 1]) teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 6), mat('#222')), s * 0.03, 0.27, 0.07));
-    teddy.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    at(teddy, -0.72, 0.66, 0.3, Math.PI / 2);
-    bed.add(teddy);
-    at(bed, -4.85, 0, -3.8);
-    S.add(bed);
-    this.shadowBlob(-4.85, -3.8, 2.6, 1.8);
-    this.solid(-4.85, -3.8, 1.05, 0.65, 0.56);
-    // the bed is a little bit bouncy (of course!)
-    this.world.bouncers.push({ x: -4.6, z: -3.8, r: 0.6, top: 0.62, power: 8.5, onBounce: () => this.game.audio.bounce() });
-    this.bedPos = new THREE.Vector3(-4.6, 0.6, -3.8);
-    // nightstand + lamp
-    const ns = new THREE.Group();
-    ns.add(at(rbox(0.45, 0.5, 0.45, '#ffffff', 0.03), 0, 0.25, 0));
-    ns.add(at(box(0.02, 0.18, 0.36, '#ffd1e3'), 0.23, 0.33, 0));
-    ns.add(at(cyl(0.06, 0.08, 0.06, '#ff9ec4'), 0, 0.53, 0));
-    ns.add(at(cyl(0.012, 0.012, 0.22, '#ffffff', 6), 0, 0.65, 0));
-    this.bedLampShade = cyl(0.09, 0.14, 0.16, mat('#fff3d6', { emissive: '#ffd98a', emissiveIntensity: 0.0 }), 18);
-    ns.add(at(this.bedLampShade, 0, 0.8, 0));
-    at(ns, -5.6, 0, -2.75);
-    S.add(ns);
-    this.solid(-5.6, -2.75, 0.24, 0.24, 0.52);
-    this.bedLampPos = new THREE.Vector3(-5.6, 0.8, -2.75);
-    // desk with crayons and paper under the framed drawing
-    const desk = new THREE.Group();
-    desk.add(at(rbox(1.2, 0.05, 0.55, '#ffffff', 0.02), 0, 0.62, 0));
-    for (const [x, z] of [[-0.55, -0.22], [0.55, -0.22], [-0.55, 0.22], [0.55, 0.22]]) desk.add(at(cyl(0.025, 0.025, 0.6, '#ffb3cf', 8), x, 0.3, z));
-    desk.add(at(box(0.32, 0.005, 0.24, '#fffaf0'), -0.1, 0.65, 0.05));
-    desk.add(at(cyl(0.05, 0.05, 0.12, '#9fd8ff', 12), 0.4, 0.71, -0.1));
-    ['#e0457b', '#ffd34d', '#2f7de1', '#3f9a3a', '#ff9a3c'].forEach((c, i) => { const cr = cyl(0.008, 0.008, 0.16, c, 6); cr.position.set(0.4 + (i - 2) * 0.012, 0.8, -0.1 + Math.sin(i) * 0.01); cr.rotation.z = (i - 2) * 0.12; desk.add(cr); });
-    at(desk, -1.9, 0, -4.55);
-    S.add(desk);
-    this.solid(-1.9, -4.55, 0.6, 0.28, 0.65, { noStand: true });
-    const stool = new THREE.Group();
-    stool.add(at(cyl(0.2, 0.2, 0.06, '#9fd8ff', 20), 0, 0.42, 0));
-    for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; stool.add(at(cyl(0.02, 0.02, 0.42, '#ffffff', 6), Math.cos(a) * 0.13, 0.21, Math.sin(a) * 0.13)); }
-    at(stool, -1.9, 0, -3.95);
-    S.add(stool);
-    // Jacinta's drawing of Pinky Land, framed on the wall
-    const drawing = new THREE.CanvasTexture(renderIntroDrawing());
-    drawing.colorSpace = THREE.SRGBColorSpace;
-    const frame = new THREE.Group();
-    frame.add(at(box(1.4, 0.9, 0.04, '#ffffff'), 0, 0, 0));
-    const pic = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 0.8), new THREE.MeshStandardMaterial({ map: drawing, roughness: 0.9 }));
-    pic.position.z = 0.025; frame.add(pic);
-    at(frame, -1.9, 1.55, -4.81);
-    S.add(frame);
-    this.drawingPos = new THREE.Vector3(-1.9, 0, -4.2);
-    // bookshelf on the east wall
-    const bs = new THREE.Group();
-    bs.add(at(rbox(0.36, 1.6, 1.1, '#ffffff', 0.02), 0, 0.8, 0));
-    for (let s = 0; s < 4; s++) {
-      bs.add(at(box(0.32, 0.03, 1.02, '#f0e6f5'), -0.01, 0.12 + s * 0.4, 0));
-      let z = -0.46;
-      const r = makeRandom(s + 11);
-      while (z < 0.42) {
-        const t = 0.05 + r() * 0.05, h = 0.22 + r() * 0.1;
-        const b = box(0.24, h, t, ['#e0457b', '#2f7de1', '#ffd34d', '#3f9a3a', '#b48aff', '#ff9a3c'][Math.floor(r() * 6)]);
-        b.position.set(-0.04, 0.14 + s * 0.4 + h / 2, z + t / 2);
-        if (r() < 0.12) b.rotation.x = 0.2;
-        bs.add(b);
-        z += t + 0.01;
+    const IN = { w: -5.84, e: 0.84, n: -4.84, s: -1.16 }; // inside faces of the walls
+
+    // ---- fluffy pink shag rug
+    const shag = canvasTex(256, 192, (g2, w, h) => {
+      g2.fillStyle = '#f3a9c0'; g2.fillRect(0, 0, w, h);
+      const r = makeRandom(21);
+      for (let i = 0; i < 2600; i++) {
+        const x = r() * w, y = r() * h, a = r() * Math.PI * 2, l = 3 + r() * 6;
+        g2.strokeStyle = r() < 0.5 ? '#fbc7d7' : '#e48aa8'; g2.globalAlpha = 0.5; g2.lineWidth = 1.4;
+        g2.beginPath(); g2.moveTo(x, y); g2.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g2.stroke();
       }
-    }
-    at(bs, 0.7, 0, -3.5);
-    S.add(bs);
-    this.solid(0.7, -3.5, 0.2, 0.56, 1.6, { noStand: true });
-    this.shelfPos = new THREE.Vector3(0.1, 0, -3.5);
-    // toy chest with blocks and a ball
-    const tc = new THREE.Group();
-    tc.add(at(rbox(0.9, 0.5, 0.5, '#9fd8ff', 0.05), 0, 0.25, 0));
-    tc.add(at(rbox(0.94, 0.08, 0.54, '#ffd34d', 0.03), 0, 0.52, 0));
-    tc.add(at(box(0.2, 0.2, 0.02, '#ff9ec4'), 0, 0.3, 0.26));
-    S.add(at(tc, -3.7, 0, -1.5));
-    this.solid(-3.7, -1.5, 0.47, 0.27, 0.56);
-    this.toyPos = new THREE.Vector3(-3.7, 0, -1.9);
-    [['#e0457b', 'A'], ['#2f7de1', 'B'], ['#3f9a3a', 'C']].forEach(([c, letter], i) => {
-      const b = box(0.16, 0.16, 0.16, new THREE.MeshStandardMaterial({ map: canvasTex(64, 64, (g2) => { g2.fillStyle = '#ffffff'; g2.fillRect(0, 0, 64, 64); g2.fillStyle = c; g2.font = 'bold 44px sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText(letter, 32, 34); }) }));
-      b.position.set(-2.4 + i * 0.22, 0.08 + (i === 2 ? 0.16 : 0), -2.2 + (i === 2 ? 0 : 0));
-      if (i === 2) b.position.x = -2.29;
-      b.rotation.y = i * 0.4;
-      S.add(b);
+      g2.globalAlpha = 1;
     });
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 14), new THREE.MeshStandardMaterial({ map: canvasTex(64, 32, (g2) => { ['#e0457b', '#ffd34d', '#2f7de1', '#3f9a3a'].forEach((c, i) => { g2.fillStyle = c; g2.fillRect(i * 16, 0, 16, 32); }); }), roughness: 0.4 }));
-    ball.position.set(-1.3, 0.14, -2.4); ball.castShadow = true;
-    S.add(ball);
+    const rugGeo = new RoundedBoxGeometry(2.7, 0.05, 1.75, 2, 0.02);
+    const rug = new THREE.Mesh(rugGeo, new THREE.MeshStandardMaterial({ map: shag, roughness: 1 }));
+    rug.position.set(-2.9, 0.03, -2.85); rug.receiveShadow = true;
+    S.add(rug);
+    // a soft fuzzy edge
+    const fuzz = mat('#f6b6ca', { roughness: 1 });
+    for (let i = 0; i < 70; i++) {
+      const u = i / 70, per = 2 * (2.7 + 1.75), d = u * per;
+      let x, z;
+      if (d < 2.7) { x = -1.35 + d; z = -0.875; } else if (d < 2.7 + 1.75) { x = 1.35; z = -0.875 + d - 2.7; } else if (d < 5.4 + 1.75) { x = 1.35 - (d - 4.45); z = 0.875; } else { x = -1.35; z = 0.875 - (d - 7.15); }
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), fuzz);
+      f.scale.y = 0.45; f.position.set(-2.9 + x, 0.04, -2.85 + z); S.add(f);
+    }
+
+    // ---- twin bed: headboard against the west wall, long side under the north window
+    const bed = new THREE.Group();
+    const L = 1.95, Wd = 1.0;
+    bed.add(at(rbox(L, 0.24, Wd, '#2a2523', 0.03), 0, 0.14, 0)); // dark frame
+    // white quilted mattress
+    const quiltTex = canvasTex(128, 64, (g2, w, h) => {
+      g2.fillStyle = '#f7f6f2'; g2.fillRect(0, 0, w, h);
+      g2.strokeStyle = 'rgba(160,160,170,0.5)'; g2.lineWidth = 1;
+      for (let x = -h; x < w; x += 10) { g2.beginPath(); g2.moveTo(x, 0); g2.lineTo(x + h, h); g2.stroke(); g2.beginPath(); g2.moveTo(x + h, 0); g2.lineTo(x, h); g2.stroke(); }
+    }, [3, 2]);
+    bed.add(at(rbox(L - 0.05, 0.24, Wd - 0.04, new THREE.MeshStandardMaterial({ map: quiltTex, roughness: 0.95 }), 0.07), 0, 0.37, 0));
+    // dark tufted headboard
+    const tuft = canvasTex(128, 96, (g2, w, h) => {
+      g2.fillStyle = '#2e2826'; g2.fillRect(0, 0, w, h);
+      for (let y = 12; y < h; y += 22) for (let x = (y / 22) % 2 ? 22 : 11; x < w; x += 22) {
+        const gr = g2.createRadialGradient(x, y, 0, x, y, 9); gr.addColorStop(0, 'rgba(0,0,0,0.6)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g2.fillStyle = gr; g2.fillRect(x - 9, y - 9, 18, 18);
+      }
+    });
+    const hb = rbox(0.1, 1.12, Wd + 0.06, new THREE.MeshStandardMaterial({ map: tuft, roughness: 0.9 }), 0.04);
+    bed.add(at(hb, -L / 2 - 0.02, 0.62, 0));
+    // two beige pillows
+    for (const z of [-0.22, 0.2]) { const pl = rbox(0.36, 0.13, 0.46, '#d9c7b4', 0.06); pl.rotation.z = 0.35; bed.add(at(pl, -L / 2 + 0.25, 0.56, z)); }
+    // navy blanket with white stars and moons, rumpled at the foot
+    const starTex = canvasTex(256, 256, (g2, w, h) => {
+      g2.fillStyle = '#1e3a7a'; g2.fillRect(0, 0, w, h);
+      const r = makeRandom(5);
+      g2.fillStyle = '#ffffff';
+      for (let i = 0; i < 22; i++) {
+        const x = r() * w, y = r() * h, rr = 6 + r() * 6;
+        if (r() < 0.45) { g2.beginPath(); g2.arc(x, y, rr, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#1e3a7a'; g2.beginPath(); g2.arc(x + rr * 0.5, y - rr * 0.2, rr, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#ffffff'; }
+        else { g2.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, q = k % 2 ? rr * 0.45 : rr; g2.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } g2.fill(); }
+      }
+    }, [2, 2]);
+    const blGeo = new THREE.BoxGeometry(1.25, 0.08, Wd + 0.12, 14, 1, 8);
+    const bp = blGeo.attributes.position;
+    for (let i = 0; i < bp.count; i++) {
+      const x = bp.getX(i), z = bp.getZ(i);
+      bp.setY(i, bp.getY(i) + Math.sin(x * 7 + z * 3) * 0.04 + Math.max(0, 0.3 - Math.abs(x + 0.25)) * 0.35 * Math.cos(z * 3)); // a little heap
+      if (Math.abs(z) > Wd / 2) bp.setY(i, bp.getY(i) - (Math.abs(z) - Wd / 2) * 2.2); // drapes over the sides
+    }
+    blGeo.computeVertexNormals();
+    const blanket = new THREE.Mesh(blGeo, new THREE.MeshStandardMaterial({ map: starTex, roughness: 0.95 }));
+    blanket.castShadow = true;
+    bed.add(at(blanket, 0.32, 0.53, 0));
+    // stuffies on the bed: a white bunny, a green turtle and a teddy
+    const plush = (c) => mat(c, { roughness: 1 });
+    const bunny = new THREE.Group();
+    bunny.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), plush('#ffffff')), 0, 0.1, 0));
+    bunny.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), plush('#ffffff')), 0, 0.24, 0));
+    for (const sg of [-1, 1]) { const e = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, 0.12, 4, 8), plush('#ffffff')); e.position.set(sg * 0.035, 0.36, 0); e.rotation.z = sg * 0.2; bunny.add(e); }
+    for (const sg of [-1, 1]) bunny.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 6), mat('#222')), sg * 0.03, 0.26, 0.07));
+    bed.add(at(bunny, -0.5, 0.5, 0.3, Math.PI / 2));
+    const turtle = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), plush('#5aa86a'));
+    turtle.add(shell);
+    turtle.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), plush('#9fd6a0')), 0.12, 0.03, 0));
+    bed.add(at(turtle, 0.25, 0.68, -0.05, 0.4));
+    const teddy = new THREE.Group();
+    const fur = plush('#d8b98f');
+    teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), fur), 0, 0.1, 0));
+    teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 10), fur), 0, 0.24, 0.01));
+    for (const sg of [-1, 1]) teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), fur), sg * 0.05, 0.31, 0));
+    for (const sg of [-1, 1]) teddy.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 6), mat('#222')), sg * 0.028, 0.26, 0.065));
+    bed.add(at(teddy, -0.62, 0.5, -0.25, Math.PI / 2));
+    bed.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const bedX = IN.w + 0.03 + L / 2, bedZ = IN.n + 0.02 + Wd / 2;
+    at(bed, bedX, 0, bedZ);
+    S.add(bed);
+    this.shadowBlob(bedX, bedZ, 2.4, 1.4);
+    this.solid(bedX, bedZ, L / 2, Wd / 2, 0.5);
+    // the bed is a little bit bouncy (of course!)
+    this.world.bouncers.push({ x: bedX + 0.3, z: bedZ, r: 0.5, top: 0.52, power: 8.5, onBounce: () => this.game.audio.bounce() });
+    this.bedPos = new THREE.Vector3(bedX + 0.3, 0.5, bedZ + 0.2);
+
+    // ---- black nightstand with a silver ribbed lamp and a white pleated shade
+    const ns = new THREE.Group();
+    ns.add(at(rbox(0.46, 0.6, 0.46, '#1d1b1c', 0.02, { roughness: 0.5 }), 0, 0.3, 0));
+    ns.add(at(box(0.01, 0.15, 0.38, '#2c292a'), 0.235, 0.46, 0)); // drawer
+    ns.add(at(box(0.015, 0.02, 0.1, '#9a9aa0', { metalness: 0.8 }), 0.245, 0.46, 0));
+    ns.add(at(box(0.42, 0.02, 0.42, '#2c292a'), 0, 0.2, 0)); // open shelf
+    ns.add(at(box(0.3, 0.06, 0.24, '#7d5f8f'), 0, 0.24, 0)); // books on the shelf
+    const silver = mat('#cfd3da', { metalness: 0.9, roughness: 0.22 });
+    const base = new THREE.Mesh(new THREE.LatheGeometry([...Array(14)].map((_, i) => new THREE.Vector2(0.03 + Math.sin((i / 13) * Math.PI) * 0.075 + (i % 2) * 0.006, i * 0.018)), 20), silver);
+    base.position.y = 0.61; base.castShadow = true; ns.add(base);
+    ns.add(at(cyl(0.008, 0.008, 0.14, silver, 6), 0, 0.92, 0));
+    const pleat = canvasTex(128, 32, (g2, w, h) => { for (let x = 0; x < w; x += 4) { g2.fillStyle = (x / 4) % 2 ? '#f7f3ea' : '#e6e0d4'; g2.fillRect(x, 0, 4, h); } });
+    this.bedLampShade = cyl(0.1, 0.16, 0.2, new THREE.MeshStandardMaterial({ map: pleat, emissive: '#ffd98a', emissiveIntensity: 0, roughness: 0.9 }), 24);
+    ns.add(at(this.bedLampShade, 0, 1.02, 0));
+    ns.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), mat('#f2c2d6', { roughness: 1 })), -0.12, 0.64, 0.12)); // tiny plush
+    const nsZ = bedZ + Wd / 2 + 0.28;
+    at(ns, IN.w + 0.25, 0, nsZ);
+    S.add(ns);
+    this.solid(IN.w + 0.25, nsZ, 0.24, 0.24, 0.6, { noStand: true });
+    this.bedLampPos = new THREE.Vector3(IN.w + 0.25, 1.0, nsZ);
+
+    // ---- pink tie-dye cat shelves + a sisal cat post on the west wall
+    const tie = canvasTex(128, 64, (g2, w, h) => {
+      const cols = ['#f7a6c9', '#c8a2f0', '#9fd2f5', '#f9c9a0', '#f6d1e8'];
+      const r = makeRandom(31);
+      g2.fillStyle = '#f7b8d2'; g2.fillRect(0, 0, w, h);
+      for (let i = 0; i < 40; i++) { const gr = g2.createRadialGradient(r() * w, r() * h, 0, r() * w, r() * h, 20 + r() * 25); const c = cols[Math.floor(r() * cols.length)]; gr.addColorStop(0, c); gr.addColorStop(1, c + '00'); g2.fillStyle = gr; g2.fillRect(0, 0, w, h); }
+    });
+    const tieMat = new THREE.MeshStandardMaterial({ map: tie, roughness: 1 });
+    const blackM = mat('#151515', { roughness: 0.5 });
+    const catShelf = (z, y, len = 0.42, depth = 0.3) => {
+      const g2 = new THREE.Group();
+      g2.add(at(rbox(depth, 0.05, len, tieMat, 0.02), 0, 0, 0));
+      for (const sz of [-1, 1]) { // black L brackets
+        g2.add(at(box(0.02, 0.16, 0.02, blackM), -depth / 2 + 0.01, -0.1, sz * (len / 2 - 0.06)));
+        const d = box(0.02, 0.2, 0.02, blackM); d.rotation.z = 0.9; g2.add(at(d, -depth / 2 + 0.08, -0.08, sz * (len / 2 - 0.06)));
+      }
+      at(g2, IN.w + depth / 2, y, z); S.add(g2);
+      return g2;
+    };
+    // box perch with a tie-dye cube and a scratching post (above the headboard)
+    catShelf(bedZ + 0.05, 1.5, 0.6);
+    catShelf(bedZ + 0.05, 2.05, 0.6);
+    S.add(at(rbox(0.26, 0.5, 0.26, tieMat, 0.04), IN.w + 0.15, 1.78, bedZ + 0.17));
+    const sisal = new THREE.MeshStandardMaterial({ map: canvasTex(32, 64, (g2, w, h) => { g2.fillStyle = '#e6d6b4'; g2.fillRect(0, 0, w, h); g2.strokeStyle = 'rgba(150,120,80,0.6)'; for (let y = 0; y < h; y += 3) { g2.beginPath(); g2.moveTo(0, y); g2.lineTo(w, y + 1.5); g2.stroke(); } }, [2, 6]), roughness: 1 });
+    S.add(at(cyl(0.045, 0.045, 0.5, sisal, 10), IN.w + 0.15, 1.78, bedZ - 0.2));
+    catShelf(nsZ - 0.05, 2.25, 0.36);
+    // the tall cat post (floor to ceiling-ish), between the nightstand and the dresser
+    const postZ = nsZ + 0.42;
+    S.add(at(cyl(0.06, 0.06, 1.85, sisal, 12), IN.w + 0.17, 0.95, postZ));
+    for (const y of [0.62, 1.12, 1.62, 1.9]) S.add(at(rbox(0.3, 0.04, 0.32, tieMat, 0.015), IN.w + 0.17, y, postZ));
+    this.solid(IN.w + 0.17, postZ, 0.08, 0.08, 1.9, { noStand: true });
+    // dangly cat toys
+    for (const [y, z, c] of [[1.45, postZ + 0.12, '#ff9a3c'], [0.95, postZ - 0.12, '#ffd34d']]) {
+      S.add(at(cyl(0.003, 0.003, 0.3, '#888', 4), IN.w + 0.2, y + 0.15, z));
+      S.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), mat(c, { roughness: 1 })), IN.w + 0.2, y, z));
+    }
+    // the wavy hanging cat bridge
+    const bridgeZ0 = postZ + 0.25, bridgeZ1 = -2.15;
+    catShelf(bridgeZ1 - 0.12, 2.2, 0.3);
+    const bpts = [];
+    for (let i = 0; i <= 20; i++) { const u = i / 20; bpts.push(new THREE.Vector3(IN.w + 0.13, 2.2 - Math.sin(u * Math.PI) * 0.2 + Math.sin(u * Math.PI * 3) * 0.04, bridgeZ0 + (bridgeZ1 - bridgeZ0) * u)); }
+    const bridge = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(bpts), 30, 0.07, 8), tieMat);
+    bridge.scale.set(1, 1, 1); bridge.castShadow = true;
+    S.add(bridge);
+
+    // ---- whitewashed 4-drawer dresser with silver knobs
+    const wash = canvasTex(64, 128, (g2, w, h) => {
+      g2.fillStyle = '#ebe5da'; g2.fillRect(0, 0, w, h);
+      const r = makeRandom(8);
+      for (let i = 0; i < 60; i++) { g2.strokeStyle = `rgba(170,150,120,${0.08 + r() * 0.1})`; g2.lineWidth = 1; const y = r() * h; g2.beginPath(); g2.moveTo(0, y); g2.bezierCurveTo(w / 3, y + 2, (2 * w) / 3, y - 2, w, y); g2.stroke(); }
+    });
+    const washM = new THREE.MeshStandardMaterial({ map: wash, roughness: 0.75 });
+    const dr = new THREE.Group();
+    const DW = 0.82, DH = 1.12, DD = 0.46;
+    dr.add(at(rbox(DD, DH, DW, washM, 0.02), 0, DH / 2 + 0.04, 0));
+    dr.add(at(rbox(DD + 0.03, 0.035, DW + 0.03, washM, 0.01), 0, DH + 0.05, 0));
+    for (let k = 0; k < 4; k++) {
+      const y = 0.2 + k * 0.255;
+      dr.add(at(rbox(0.02, 0.22, DW - 0.08, washM, 0.01), DD / 2 + 0.005, y, 0));
+      for (const sz of [-1, 1]) dr.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), silver), DD / 2 + 0.03, y, sz * 0.2));
+    }
+    // things on top: a little glass lamp, a unicorn plush, a cup
+    dr.add(at(cyl(0.05, 0.05, 0.16, mat('#e8f4ff', { transparent: true, opacity: 0.5, roughness: 0.1, emissive: '#fff1c8', emissiveIntensity: 0.3 }), 14), -0.05, DH + 0.15, -0.28));
+    dr.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), plush('#f7f2ff')), 0, DH + 0.12, 0.1));
+    dr.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), plush('#ffb3cf')), 0.05, DH + 0.1, 0.24));
+    const drZ = postZ + 0.3 + DW / 2;
+    at(dr, IN.w + DD / 2, 0, drZ);
+    S.add(dr);
+    this.shadowBlob(IN.w + DD / 2, drZ, 0.8, 1.1);
+    this.solid(IN.w + DD / 2, drZ, DD / 2, DW / 2, DH + 0.06, { noStand: true });
+    this.dresserPos = new THREE.Vector3(IN.w + DD + 0.35, 0, drZ);
+
+    // ---- a toy sword hanging on the north wall, next to the window
+    const sword = new THREE.Group();
+    sword.add(at(box(0.06, 0.62, 0.012, mat('#2a3550', { metalness: 0.5, roughness: 0.4 })), 0, 0.12, 0));
+    sword.add(at(box(0.02, 0.6, 0.016, mat('#8fa3c8', { metalness: 0.6, roughness: 0.3 })), 0, 0.12, 0.004));
+    sword.add(at(box(0.2, 0.04, 0.03, '#1a1a1a'), 0, -0.2, 0));
+    sword.add(at(cyl(0.018, 0.018, 0.16, '#1a1a1a', 8), 0, -0.3, 0));
+    sword.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), mat('#1a1a1a')), 0, -0.39, 0));
+    at(sword, -3.25, 1.55, IN.n + 0.02);
+    S.add(sword);
+    this.swordPos = new THREE.Vector3(-3.25, 0, IN.n + 0.7);
+
+    // ---- east wall: white closet with arched bifold doors (north end)
+    const cl = new THREE.Group();
+    const clW = 1.25;
+    const arch = canvasTex(64, 256, (g2, w, h) => {
+      g2.fillStyle = '#fbfbf8'; g2.fillRect(0, 0, w, h);
+      g2.strokeStyle = 'rgba(150,150,150,0.55)'; g2.lineWidth = 2;
+      const panel = (y0, y1, arched) => { g2.beginPath(); g2.moveTo(10, y1); g2.lineTo(10, y0 + (arched ? 14 : 0)); if (arched) g2.quadraticCurveTo(w / 2, y0 - 10, w - 10, y0 + 14); else g2.lineTo(w - 10, y0); g2.lineTo(w - 10, y1); g2.closePath(); g2.stroke(); };
+      panel(16, 150, true); panel(166, 244, false);
+    });
+    const doorM = new THREE.MeshStandardMaterial({ map: arch, roughness: 0.6 });
+    cl.add(at(box(0.05, 2.12, clW + 0.12, '#ffffff'), 0, 1.06, 0)); // frame
+    for (let k = 0; k < 4; k++) {
+      const d = box(0.04, 2.0, clW / 4 - 0.01, doorM);
+      d.material = [mat('#ffffff'), doorM, mat('#ffffff'), mat('#ffffff'), mat('#ffffff'), mat('#ffffff')];
+      cl.add(at(d, -0.035 - (k % 2) * 0.012, 1.02, -clW / 2 + clW / 8 + k * (clW / 4)));
+    }
+    for (const z of [-0.03, 0.03]) cl.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), silver), -0.08, 1.0, z));
+    const clZ = IN.n + 0.12 + clW / 2;
+    at(cl, IN.e, 0, clZ);
+    S.add(cl);
+    this.closetPos = new THREE.Vector3(IN.e - 0.7, 0, clZ);
+    // a mint-green ball in front of the closet
+    S.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 12), mat('#7fd0b8', { roughness: 0.5 })), IN.e - 0.25, 0.17, IN.n + 0.3));
+
+    // ---- east wall: the white cube desk / shelf unit
+    const white = mat('#f6f5f1', { roughness: 0.6 });
+    const unit = new THREE.Group();
+    const UD = 0.4; // depth (x)
+    const cubeLen = 0.95, deskLen = 1.05; // along z
+    // cube shelves (3 x 3) next to the closet
+    const cH = 0.95;
+    unit.add(at(box(UD, 0.03, cubeLen, white), 0, cH, -deskLen / 2));
+    unit.add(at(box(UD, 0.03, cubeLen, white), 0, 0.02, -deskLen / 2));
+    for (let k = 0; k <= 3; k++) unit.add(at(box(UD, cH, 0.025, white), 0, cH / 2, -deskLen / 2 - cubeLen / 2 + k * (cubeLen / 3)));
+    for (let k = 1; k < 3; k++) unit.add(at(box(UD, 0.025, cubeLen, white), 0, k * (cH / 3), -deskLen / 2));
+    unit.add(at(box(0.02, cH, cubeLen, white), UD / 2 - 0.01, cH / 2, -deskLen / 2)); // back
+    // desk part (toward the door)
+    const dH = 0.78;
+    unit.add(at(box(UD, 0.03, deskLen, white), 0, dH, deskLen / 2));
+    unit.add(at(box(UD, dH, 0.025, white), 0, dH / 2, deskLen - 0.01));
+    unit.add(at(box(UD, 0.025, deskLen * 0.45, white), 0, dH - 0.2, deskLen * 0.75));
+    unit.add(at(box(UD, dH - 0.2, 0.025, white), 0, (dH - 0.2) / 2, deskLen * 0.52));
+    // things in the cubes: books, a bin, a box, little toys
+    const r = makeRandom(44);
+    const cubeCenter = (i, j) => [-deskLen / 2 - cubeLen / 2 + cubeLen / 6 + i * (cubeLen / 3), j * (cH / 3) + 0.03];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      const [z, y] = cubeCenter(i, j);
+      const pick = (i * 3 + j) % 4;
+      if (pick === 0) { let zz = z - 0.12; while (zz < z + 0.1) { const t = 0.03 + r() * 0.03, h = 0.16 + r() * 0.08; unit.add(at(box(0.22, h, t, ['#e0457b', '#2f7de1', '#ffd34d', '#3f9a3a', '#b48aff'][Math.floor(r() * 5)]), 0.02, y + h / 2, zz + t / 2)); zz += t + 0.005; } }
+      else if (pick === 1) unit.add(at(rbox(0.3, 0.2, 0.26, '#c9a27a', 0.01), 0, y + 0.1, z));
+      else if (pick === 2) unit.add(at(new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), mat(['#7fd0a0', '#c8a2f0', '#9fd8ff'][j], { roughness: 0.6 })), -0.02, y + 0.07, z));
+      else unit.add(at(rbox(0.28, 0.2, 0.26, '#ffd34d', 0.02), 0, y + 0.1, z));
+    }
+    // on top of the cubes: a stack of books, a little dragon figure, a bunny figure
+    for (let k = 0; k < 5; k++) unit.add(at(box(0.22, 0.035, 0.28, ['#e0457b', '#2f7de1', '#3f9a3a', '#ff9a3c', '#ffd34d'][k]), 0, cH + 0.03 + k * 0.036, -deskLen / 2 - 0.2));
+    unit.add(at(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 8), mat('#c47ad0')), 0, cH + 0.08, -deskLen / 2 + 0.25));
+    unit.add(at(new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.08, 4, 8), mat('#e8c49a')), 0, cH + 0.08, -deskLen / 2 + 0.05));
+    // on the desk: jars, crayons, papers
+    unit.add(at(cyl(0.06, 0.06, 0.16, mat('#9fd0c8', { transparent: true, opacity: 0.55, roughness: 0.1 }), 14), 0, dH + 0.09, deskLen / 2 - 0.15));
+    unit.add(at(cyl(0.05, 0.05, 0.12, '#3a2a2a', 14), 0, dH + 0.07, deskLen / 2 - 0.32));
+    unit.add(at(box(0.26, 0.006, 0.34, '#fffaf0'), -0.02, dH + 0.02, deskLen / 2 + 0.15));
+    unit.add(at(cyl(0.045, 0.045, 0.11, '#ffffff', 12), 0.02, dH + 0.07, deskLen / 2 + 0.38));
+    ['#e0457b', '#ffd34d', '#2f7de1', '#3f9a3a', '#ff9a3c'].forEach((c, i) => { const cr = cyl(0.007, 0.007, 0.15, c, 6); cr.position.set(0.02 + (i - 2) * 0.01, dH + 0.17, deskLen / 2 + 0.38); cr.rotation.z = (i - 2) * 0.12; unit.add(cr); });
+    // under the desk: a white laundry basket and a yellow bin
+    const basket = new THREE.Group();
+    const bm = mat('#fafafa', { roughness: 0.5 });
+    basket.add(at(box(0.32, 0.02, 0.44, bm), 0, 0.01, 0));
+    for (const sz of [-1, 1]) basket.add(at(box(0.32, 0.26, 0.02, bm), 0, 0.13, sz * 0.22));
+    for (const sx of [-1, 1]) basket.add(at(box(0.02, 0.26, 0.44, bm), sx * 0.16, 0.13, 0));
+    basket.add(at(rbox(0.26, 0.14, 0.38, '#6a8fc8', 0.04), 0, 0.14, 0)); // clothes
+    unit.add(at(basket, -0.02, 0, deskLen * 0.25));
+    unit.add(at(rbox(0.28, 0.22, 0.24, '#ffd34d', 0.02), -0.03, 0.11, deskLen * 0.76));
+    const unitZ = clZ + clW / 2 + 0.08 + deskLen / 2 + cubeLen;
+    at(unit, IN.e - UD / 2, 0, unitZ - deskLen / 2);
+    unit.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    S.add(unit);
+    const ux = IN.e - UD / 2, G0 = unitZ - deskLen / 2, uz0 = G0 - deskLen / 2 - cubeLen / 2, uz1 = G0 + deskLen;
+    this.solid(ux, (uz0 + uz1) / 2, UD / 2, (uz1 - uz0) / 2, cH, { noStand: true });
+    this.shadowBlob(ux, (uz0 + uz1) / 2, 0.6, uz1 - uz0);
+    this.shelfPos = new THREE.Vector3(ux - 0.7, 0, G0 - deskLen / 2);
+
+    // ---- wall art above the desk: a red dragon poster, drawings and the framed picture
+    const wallPic = (canvas, w, h, z, y, frame) => {
+      const t = canvas instanceof HTMLCanvasElement ? new THREE.CanvasTexture(canvas) : canvas;
+      t.colorSpace = THREE.SRGBColorSpace;
+      const grp = new THREE.Group();
+      if (frame) grp.add(at(box(0.03, h + 0.1, w + 0.1, '#ffffff'), 0, 0, 0));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }));
+      m.rotation.y = -Math.PI / 2; m.position.x = frame ? -0.02 : 0; grp.add(m);
+      at(grp, IN.e - 0.01, y, z); S.add(grp);
+      return grp;
+    };
+    wallPic(dragonPosterCanvas(), 0.82, 0.6, uz0 + 0.71, 1.72, false);
+    wallPic(catDrawingCanvas(), 0.28, 0.36, uz1 - 0.26, 2.05, false);
+    wallPic(flyerCanvas(), 0.26, 0.2, uz1 - 0.72, 2.0, false);
+    wallPic(pencilPageCanvas(), 0.24, 0.3, uz0 + 0.56, 1.2, false);
+    const drawing = new THREE.CanvasTexture(renderIntroDrawing());
+    wallPic(drawing, 0.8, 0.5, uz1 - 0.42, 1.45, true);
+    this.drawingPos = new THREE.Vector3(ux - 0.75, 0, uz1 - 0.42);
+    // towels on hooks between the poster and the closet
+    for (const [z, c] of [[uz0 + 0.08, '#bfe3d0'], [uz0 + 0.21, '#f49aa8']]) {
+      S.add(at(cyl(0.012, 0.012, 0.06, '#d0d0d0', 6), IN.e - 0.03, 1.72, z).rotateZ(Math.PI / 2));
+      const tw = rbox(0.03, 0.55, 0.13, c, 0.015); tw.rotation.x = 0.05; S.add(at(tw, IN.e - 0.04, 1.45, z));
+    }
+
+    // ---- Lego baseplates and mint balloons on the floor
+    const lego = new THREE.Group();
+    lego.add(at(rbox(0.6, 0.12, 0.45, '#c9a27a', 0.01), 0, 0.06, 0));
+    lego.add(at(box(0.5, 0.02, 0.38, '#f2f2f2'), 0, 0.13, 0));
+    const lr = makeRandom(12);
+    for (let i = 0; i < 18; i++) lego.add(at(box(0.06, 0.04, 0.03, ['#e0457b', '#2f7de1', '#ffd34d', '#3f9a3a', '#ff9a3c', '#66c2ff'][i % 6]), -0.2 + lr() * 0.4, 0.16, -0.15 + lr() * 0.3));
+    lego.add(at(box(0.45, 0.015, 0.3, '#3fa34d'), 0.55, 0.01, 0.1));
+    at(lego, -1.95, 0, -1.6, 0.3);
+    S.add(lego);
+    this.solid(-1.95, -1.6, 0.3, 0.24, 0.14, { noStand: true });
+    this.toyPos = new THREE.Vector3(-1.95, 0, -2.2);
+    const balloon = mat('#9fe0c8', { roughness: 0.35 });
+    for (const [x, z, s2] of [[-0.25, -4.55, 1], [0.05, -4.35, 0.9], [-0.45, -4.3, 0.85]]) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s2, 18, 14), balloon);
+      b.scale.y = 1.15; b.position.set(x, 0.18 * s2, z); b.castShadow = true; S.add(b);
+    }
+
     // glow-in-the-dark stars on the ceiling
     this.ceilingStars = new THREE.MeshStandardMaterial({ color: '#fff6c0', emissive: '#fff09a', emissiveIntensity: 0, side: THREE.DoubleSide });
-    const r = makeRandom(77);
+    const rs = makeRandom(77);
     for (let i = 0; i < 22; i++) {
       const sh = new THREE.Shape();
       for (let k = 0; k < 10; k++) { const a = (k * Math.PI) / 5, rr = k % 2 ? 0.035 : 0.08; k ? sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : sh.moveTo(rr, 0); }
       const st = new THREE.Mesh(new THREE.ShapeGeometry(sh), this.ceilingStars);
-      st.rotation.x = Math.PI / 2; st.rotation.z = r() * 6;
-      st.position.set(-5.6 + r() * 6.2, CEIL - 0.01, -4.6 + r() * 3.2);
+      st.rotation.x = Math.PI / 2; st.rotation.z = rs() * 6;
+      st.position.set(-5.6 + rs() * 6.2, CEIL - 0.01, -4.6 + rs() * 3.2);
       S.add(st);
     }
-    // a little closet
-    const cl = new THREE.Group();
-    cl.add(at(rbox(1.1, 2.0, 0.55, '#ffffff', 0.03), 0, 1.0, 0));
-    for (const x of [-0.27, 0.27]) { cl.add(at(box(0.52, 1.9, 0.02, '#ffe1ee'), x, 1.0, 0.28)); cl.add(at(cyl(0.015, 0.015, 0.2, '#d9a441', 6), x * 0.2, 1.05, 0.3)); }
-    at(cl, -5.6, 0, -1.6, Math.PI / 2);
-    S.add(cl);
-    this.solid(-5.6, -1.6, 0.3, 0.56, 2.0, { noStand: true });
   }
 
   // ---------------------------------------------------------------- bathroom
@@ -823,8 +1193,24 @@ export class HomeLevel extends Level {
       action: () => { const [t, b] = books[Math.floor(Math.random() * books.length)]; g.ui.dialogue([line(J, `“${t}.” ${b}`), line(PINKY, 'Read it again! Pleeease?')]); },
     });
     this.addInteractable({
-      pos: () => this.toyPos, radius: 1.4, label: 'Play with your toys 🧸',
-      action: () => g.ui.dialogue([line(J, 'Blocks, a bouncy ball, a jump rope… and my old wind-up dinosaur!'), line(PINKY, 'Rawr! Wait — that’s the friendliest dinosaur roar I’ve ever heard.')]),
+      pos: () => this.toyPos, radius: 1.4, label: 'Build with Legos 🧱',
+      action: () => g.ui.dialogue([line(J, 'Click, click, click… I’m building a tiny Pinky Land out of Legos!'), line(PINKY, 'Is that me? The pink square? I LOVE it. Add a rainbow!')]),
+    });
+    this.addInteractable({
+      pos: () => this.swordPos, radius: 1.3, label: 'Look at the sword ⚔️',
+      action: () => g.ui.dialogue([line(J, 'My brave knight sword! It’s only for pretend.'), line(PINKY, 'Sir Pinky, protector of pillows! …Real knights are kind, too, you know.')]),
+    });
+    this.addInteractable({
+      pos: () => new THREE.Vector3(-5.2, 0, -3.1), radius: 1.0, label: 'Look at the cat shelves 🐾',
+      action: () => g.ui.dialogue([line(J, 'These shelves are for the kitties. They climb all the way up and nap by the ceiling!'), line(PINKY, 'A cat bridge! I wish I could climb that high… I’m a little too floppy.')]),
+    });
+    this.addInteractable({
+      pos: () => this.closetPos, radius: 1.3, label: 'Open the closet 👗',
+      action: () => g.ui.dialogue([line(J, 'Hoodies, sneakers, my glow dance shirt… and a whole box of dress-up clothes!'), line(PINKY, 'Can I wear the sparkly cape? Pleeease?')]),
+    });
+    this.addInteractable({
+      pos: () => this.dresserPos, radius: 1.1, label: 'Look at the dresser 🦄',
+      action: () => g.ui.dialogue([line(J, 'My night light, my unicorn, and the little treasures I find.'), line(PINKY, 'Everything up here is somebody’s favorite. Like me! 💗')]),
     });
     this.addInteractable({
       pos: () => this.bedLampPos, radius: 1.3, label: () => (this.bedLampOn ? 'Turn off the lamp' : 'Turn on the lamp 💡'),
@@ -873,7 +1259,7 @@ export class HomeLevel extends Level {
       if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) {
         const edge = Math.min(x - r.x0, r.x1 - x, z - r.z0, r.z1 - z);
         if (edge < 0.12) return out.set('#6a5a6a');
-        return out.set({ living: '#e8c49a', kitchen: '#d6efe2', bedroom: '#ffd6e6', bath: '#d6eaff' }[k]);
+        return out.set({ living: '#e8c49a', kitchen: '#d6efe2', bedroom: '#c5d098', bath: '#d6eaff' }[k]);
       }
     }
     return out.set('#9fcf86');

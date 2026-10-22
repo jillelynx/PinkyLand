@@ -60,9 +60,9 @@ export function drawPinky(g, o) {
     g.globalAlpha *= fillA;
     path();
     const grd = g.createLinearGradient(-hw, top, hw, 0);
-    grd.addColorStop(0, '#fde8ee');
-    grd.addColorStop(0.5, '#f8cfd9');
-    grd.addColorStop(1, '#eeb3c2');
+    grd.addColorStop(0, '#fbe6df');
+    grd.addColorStop(0.5, '#f3cdc3');
+    grd.addColorStop(1, '#e4b2a8');
     g.fillStyle = grd;
     g.fill();
     // silky sheen
@@ -72,11 +72,22 @@ export function drawPinky(g, o) {
     g.ellipse(-hw * 0.35, top + H * 0.3, 5, H * 0.22, -0.2, 0, Math.PI * 2);
     g.fill();
     g.restore();
+    // a few soft wrinkles, like the real worn pillow
+    g.save();
+    g.globalAlpha *= 0.35;
+    g.strokeStyle = '#c99a90'; g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(-hw + 2, top + 4); g.quadraticCurveTo(-hw * 0.4, top + H * 0.2, -hw * 0.1, top + H * 0.32);
+    g.moveTo(hw - 2, top + 3); g.quadraticCurveTo(hw * 0.5, top + H * 0.15, hw * 0.25, top + H * 0.22);
+    g.moveTo(-hw + 3, -4); g.quadraticCurveTo(-hw * 0.4, -H * 0.18, -hw * 0.05, -H * 0.3);
+    g.moveTo(hw - 3, -5); g.quadraticCurveTo(hw * 0.45, -H * 0.2, hw * 0.2, -H * 0.12);
+    g.stroke();
+    g.restore();
   }
   // crayon outline (drawn progressively during the "being imagined" moment)
   g.save();
   g.lineCap = 'round'; g.lineJoin = 'round';
-  g.strokeStyle = '#d98aa3';
+  g.strokeStyle = '#cf9090';
   g.lineWidth = 2.6;
   if (sketch < 1) {
     path();
@@ -95,11 +106,22 @@ export function drawPinky(g, o) {
     g.save();
     g.globalAlpha *= faceA;
     const fx = (o.lookX || 0) * 2.5 + (o.facing || 1) * 1.5;
-    const fy = top + H * 0.3 + (o.lookY || 0) * 2;
+    const fy = top + H * 0.26 + (o.lookY || 0) * 2;
     const ink = '#3366cc';
-    g.fillStyle = ink; g.strokeStyle = ink;
     g.lineCap = 'round';
-    const ex = 6.5;
+    // blue marker scribbles down his middle (they're on the real Pinky too)
+    g.save();
+    g.globalAlpha *= 0.7;
+    g.strokeStyle = ink; g.lineWidth = 1.3;
+    for (const [dy, w2] of [[0.42, 6], [0.58, 5], [0.74, 4], [0.88, 3.5]]) {
+      const y = top + H * dy, x = fx * 0.4 + 1.5;
+      g.beginPath(); g.moveTo(x - w2, y); g.lineTo(x - w2 * 0.3, y - 1); g.lineTo(x + w2 * 0.3, y + 0.6); g.lineTo(x + w2, y - 0.6);
+      g.moveTo(x - w2 * 0.8, y + 1.6); g.lineTo(x + w2 * 0.8, y + 1.3);
+      g.stroke();
+    }
+    g.restore();
+    g.fillStyle = ink; g.strokeStyle = ink;
+    const ex = 5.5;
     const expr = o.expr || 'normal';
     const blink = o.blink;
     for (const s of [-1, 1]) {
@@ -116,7 +138,8 @@ export function drawPinky(g, o) {
       } else {
         const big = expr === 'wonder' ? 1.3 : 1;
         const low = expr === 'sad' ? 1 : 0;
-        g.beginPath(); g.ellipse(x, y + low, 2.3 * big, 3.0 * big, 0, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.ellipse(x, y + low, 2.6 * big, 2.2 * big, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#1f3f8f'; g.beginPath(); g.arc(x - 0.3, y + low + 0.2, 1.3 * big, 0, 7); g.fill(); g.fillStyle = ink;
         if (expr === 'wonder') { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x - 0.8, y - 1.2, 0.9, 0, 7); g.fill(); g.fillStyle = ink; }
         if (expr === 'sad') { g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - s * 3, y - 5); g.lineTo(x + s * 1, y - 6); g.stroke(); }
       }

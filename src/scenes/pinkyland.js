@@ -320,7 +320,7 @@ export class PinkyLandLevel extends Level {
     this.grandpaTop = new THREE.Vector3(gpX, gpTop, gpZ);
     this.landmarks.push({ x: gpX, z: gpZ, icon: '🩷', label: 'Big Pinky' });
     // Baby Pinky — the littlest pinky, white with a pink smile, hops near Big Pinky
-    this.baby = this.addNPC(new NPC(mk({ scale: 0.32, color: '#fffafc', variant: 0, name: 'Baby Pinky', ink: '#ff5fa2' }), W, { x: gpX + 3.2, z: gpZ + 1.5, name: 'Baby Pinky', journalKey: 'babypinky' }));
+    this.baby = this.addNPC(new NPC(mk({ scale: 0.32, color: '#fffafc', variant: 0, name: 'Baby Pinky', ink: '#ff5fa2', plain: true }), W, { x: gpX + 3.2, z: gpZ + 1.5, name: 'Baby Pinky', journalKey: 'babypinky' }));
     this.baby.wander = { x: gpX + 3.4, z: gpZ + 1.2, r: 2.2 };
 
     this.pip = this.addNPC(new NPC(mk({ scale: 0.38, color: '#fff0a8', variant: 1, name: 'Pip', ink: '#d0602a' }), W, { x: 6, z: -14, name: 'Pip', journalKey: 'pip' }));

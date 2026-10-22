@@ -4,12 +4,12 @@
 // To fine-tune his look, change PINKY_LOOK below.
 // ---------------------------------------------------------------
 import * as THREE from 'three';
-import { pillowFaceTexture } from './faces.js';
+import { pillowFaceTexture, pinkyWrinkleTexture } from './faces.js';
 import { damp } from '../util/noise.js';
 
 export const PINKY_LOOK = {
-  color: '#f6c4d0', // pale pink
-  sheen: '#ffeef2',
+  color: '#f1c9bf', // worn, pale pinky-beige satin (from the photo of the real Pinky)
+  sheen: '#fff2ea',
   width: 0.62, // Pinky stands tall, like a portrait
   height: 0.9,
   thickness: 0.36,
@@ -45,7 +45,8 @@ export class Pillow {
    * @param {string} o.color tint for Pinky's friends
    * @param {number} o.variant face variation (0 = Pinky's real face)
    */
-  constructor({ scale = 1, color = PINKY_LOOK.color, variant = 0, name = 'Pinky', ink } = {}) {
+  constructor({ scale = 1, color = PINKY_LOOK.color, variant = 0, name = 'Pinky', ink, plain = false } = {}) {
+    this.plain = plain;
     this.name = name;
     this.variant = variant;
     this.ink = ink;
@@ -58,8 +59,11 @@ export class Pillow {
       color, roughness: 0.38, sheen: 1, sheenColor: new THREE.Color(PINKY_LOOK.sheen), sheenRoughness: 0.25,
       clearcoat: 0.25, clearcoatRoughness: 0.5,
     });
+    // the real Pinky is wrinkly all over
+    if (variant === 0 && !plain) { side.map = pinkyWrinkleTexture(); side.bumpMap = pinkyWrinkleTexture(true); side.bumpScale = 0.6; }
     this.faceMat = side.clone();
-    this.faceMat.map = pillowFaceTexture({ variant, ink });
+    if (variant === 0 && !plain) { this.faceMat.bumpMap = pinkyWrinkleTexture(true); this.faceMat.bumpScale = 0.6; }
+    this.faceMat.map = pillowFaceTexture({ variant, ink, plain });
     // BoxGeometry material order: +x, -x, +y, -y, +z (front/face), -z (back)
     this.mesh = new THREE.Mesh(geo, [side, side, side, side, this.faceMat, side]);
     this.mesh.castShadow = true;
@@ -94,7 +98,7 @@ export class Pillow {
 
   setMood(mood) {
     this.mood = mood;
-    this.faceMat.map = pillowFaceTexture({ variant: this.variant, mood, ink: this.ink });
+    this.faceMat.map = pillowFaceTexture({ variant: this.variant, mood, ink: this.ink, plain: this.plain });
   }
 
   land(strength = 1) { this.squash = Math.min(1, 0.5 + strength * 0.5); }
@@ -108,11 +112,11 @@ export class Pillow {
     if (this.blinkTimer < 0) {
       this.blink = 0.14;
       this.blinkTimer = 2.5 + Math.random() * 4;
-      this.faceMat.map = pillowFaceTexture({ variant: this.variant, blink: true, mood: this.mood, ink: this.ink });
+      this.faceMat.map = pillowFaceTexture({ variant: this.variant, blink: true, mood: this.mood, ink: this.ink, plain: this.plain });
     }
     if (this.blink > 0) {
       this.blink -= dt;
-      if (this.blink <= 0) this.faceMat.map = pillowFaceTexture({ variant: this.variant, mood: this.mood, ink: this.ink });
+      if (this.blink <= 0) this.faceMat.map = pillowFaceTexture({ variant: this.variant, mood: this.mood, ink: this.ink, plain: this.plain });
     }
     if (a.actionT > 0) { a.actionT -= dt; if (a.actionT <= 0) a.action = null; }
 
