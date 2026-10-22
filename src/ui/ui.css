@@ -25,7 +25,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #fde7ef; fon
 button { font-family: var(--round); cursor: pointer; }
 
 /* ---------- Title screen ---------- */
-.title-screen { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow-y: auto; background: radial-gradient(ellipse at 50% 30%, #fff4f8 0%, #ffd9e8 45%, #c9b8ff 100%); overflow: hidden; }
+/* the title screen scrolls when the window is short (a later 'overflow: hidden' used to block it) */
+.title-screen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: radial-gradient(ellipse at 50% 30%, #fff4f8 0%, #ffd9e8 45%, #c9b8ff 100%) fixed; }
+.title-screen .clouds { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.title-screen .title-card { margin: auto; }
+/* shorter windows: a smaller Pinky and title so everything fits better */
+@media (max-height: 900px) {
+  .title-card { padding-top: 20px; padding-bottom: 24px; }
+  .title-pinky { scale: .75; margin-bottom: -10px; margin-top: -18px; }
+  .title-logo { font-size: clamp(48px, 8vw, 92px); }
+  .title-sub { margin-bottom: 18px; }
+}
 .title-screen .clouds span { position: absolute; background: #fff; border-radius: 999px; filter: blur(1px); opacity: .9; animation: drift linear infinite; box-shadow: 40px -20px 0 10px #fff, 90px 0 0 0 #fff; }
 @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 .title-card { position: relative; text-align: center; padding: 40px 56px 36px; }

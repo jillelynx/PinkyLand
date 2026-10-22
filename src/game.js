@@ -174,7 +174,7 @@ export class Game {
   // ---------------- Grown-ups menu: jump to any part of the game ----------------
   // A simple password keeps little players out. (It's a kid lock, not real security.)
   grownUpPassword() {
-    try { return localStorage.getItem('pinky-land-grownup-pw') || 'pinky'; } catch (e) { return 'pinky'; }
+    try { return localStorage.getItem('pinky-land-grownup-pw') || 'pinky79'; } catch (e) { return 'pinky79'; }
   }
 
   openGrownUp(titleEl) {
