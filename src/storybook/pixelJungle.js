@@ -3,7 +3,7 @@
 // Storybook chapters; only the drawing is different. Everything is painted onto
 // a small canvas (about 330 pixels tall) that is then blown up with crisp,
 // blocky pixels, to match the pixel-art picture of Jacinta in the jungle.
-import { JACINTA_SPRITE } from './jacintaPixelSprite.js';
+import { JACINTA_SHEET, JACINTA_ANIM } from './jacintaSheet.js';
 
 export const VH = 330; // game pixels visible from top to bottom of the screen
 
@@ -269,11 +269,11 @@ export class PixelJungle {
     this.near = nearLayer();
     this.ferns = fernStrip();
     this.cache = new Map();
-    this.sprite = new Image();
-    this.sprite.src = JACINTA_SPRITE.url;
+    this.sheet = new Image();
+    this.sheet.src = JACINTA_SHEET.url;
     this.particles = [];
-    this.landSquash = 0;
-    this.wasGrounded = true;
+    // animation state for Jacinta
+    this.anim = { state: 'idle', t: 0, dist: 0, wasGrounded: true, landT: 0, landHard: false, airT: 0, maxFall: 0, face: 'friendly', detT: 0, lastInv: 0 };
   }
 
   resize() {
@@ -470,29 +470,67 @@ export class PixelJungle {
     for (let i = 0; i < 3; i++) { const bx = ((i * 260 - viewL * 0.2) % (VW + 200) + VW + 200) % (VW + 200) - 100; g.beginPath(); g.moveTo(bx, 0); g.lineTo(bx + 40, 0); g.lineTo(bx + 140, VH); g.lineTo(bx + 80, VH); g.fill(); }
   }
 
+  // Picks Jacinta's animation frame from what she is actually doing (standing,
+  // walking, running, in the air, landing, bumped) and her face (friendly or
+  // determined), then draws it with her feet exactly on her collision box.
+  pickFrame(sb, dt) {
+    const p = sb.p, A = this.anim, C = JACINTA_ANIM;
+    const speed = Math.abs(p.vx);
+    // --- landing: only when she really touches down after being in the air
+    if (p.grounded && !A.wasGrounded && A.airT > 0.12) { A.landT = A.maxFall > 620 ? C.landFrameTime * 2 : C.landFrameTime; A.landHard = A.maxFall > 620; }
+    if (!p.grounded) { A.airT += dt; A.maxFall = Math.max(A.maxFall, p.vy); } else { A.airT = 0; A.maxFall = 0; }
+    A.wasGrounded = p.grounded;
+    A.landT = Math.max(0, A.landT - dt);
+    // --- her face: determined while running, in big jumps, near danger or after a bump
+    let reason = speed > 260 || p.spin > 0 || (p.inv > 0 && sb.state === 'play');
+    if (!reason) {
+      for (const b of sb.bunnies) if (b.state === 'walk' && (b.x - p.x) * p.facing > -10 && Math.abs(b.x - p.x) < 150 && Math.abs(b.y - p.y) < 60) { reason = true; break; }
+      if (!reason) for (const h of this.L.hazards) { const cx = h.x + h.w / 2; if ((cx - p.x) * p.facing > -10 && Math.abs(cx - p.x) < 140 && Math.abs(h.y - p.y) < 60) { reason = true; break; } }
+    }
+    if (reason) A.detT = C.determinedHold;
+    A.detT = Math.max(0, A.detT - dt);
+    A.face = A.detT > 0 ? 'determined' : 'friendly';
+    // --- body
+    let row, col;
+    if (p.inv > 1.25 && sb.state === 'play') { row = C.crouch.row; col = 1; A.state = 'hurt'; }
+    else if (!p.grounded) {
+      const J = C.jump.row; row = J;
+      if (p.spin > 0.45) col = 3; // tucked twirl of the double jump
+      else if (A.airT < 0.09 && p.vy < 0) col = 1;
+      else if (p.vy < -220) col = 2;
+      else if (p.vy < 160) col = 3;
+      else if (p.vy < 430) col = 4;
+      else col = 5;
+      A.state = 'air';
+    } else if (A.landT > 0 && speed < 40) {
+      row = C.jump.row; col = A.landHard && A.landT > C.landFrameTime ? 6 : 7; A.state = 'land';
+    } else if (speed > 260) {
+      if (A.state !== 'run') { A.state = 'run'; A.dist = 0; }
+      A.dist += speed * dt;
+      row = C.run.row; col = C.run.frames[Math.floor(A.dist / C.run.stepPx) % C.run.frames.length];
+    } else if (speed > 15) {
+      if (A.state !== 'walk') { A.state = 'walk'; A.dist = 0; }
+      A.dist += speed * dt;
+      row = C.walk.row; col = C.walk.frames[Math.floor(A.dist / C.walk.stepPx) % C.walk.frames.length];
+    } else {
+      if (A.state !== 'idle') { A.state = 'idle'; A.t = 0; }
+      A.t += dt;
+      row = C.idle.row; col = C.idle.frames[Math.floor(A.t * C.idle.fps) % C.idle.frames.length];
+    }
+    return { row: row + JACINTA_SHEET.faces[A.face], col };
+  }
+
   drawHero(g, sb, sx, sy, dt) {
     const p = sb.p;
-    if (!this.sprite.complete) return;
-    if (p.grounded && !this.wasGrounded) this.landSquash = 1;
-    this.wasGrounded = p.grounded;
-    this.landSquash = Math.max(0, this.landSquash - dt * 5);
-    if (p.inv > 0 && Math.floor(sb.time * 14) % 2 === 0 && sb.state === 'play') return;
-    const S = JACINTA_SPRITE;
-    let scx = 1, scy = 1, bob = 0, lean = 0;
-    const moving = Math.abs(p.vx) > 20;
-    if (p.grounded) {
-      if (moving) { const ph = sb.time * (Math.abs(p.vx) > 280 ? 13 : 9); bob = Math.round(Math.abs(Math.sin(ph)) * 2); lean = Math.sin(ph) * 0.03; }
-      else { scy = 1 + Math.sin(sb.time * 2.2) * 0.012; }
-    } else if (p.vy < 0) { scy = 1.05; scx = 0.96; } else { scy = 1.02; scx = 0.98; }
-    if (this.landSquash > 0) { const q = Math.sin(this.landSquash * Math.PI) * 0.1; scy *= 1 - q; scx *= 1 + q; }
-    if (p.spin > 0) scx *= Math.cos((1 - p.spin) * Math.PI * 2);
-    // her body centre is at x = 44 in the sprite; feet on the bottom row
-    const anchorX = 42;
+    const fr = this.pickFrame(sb, dt);
+    if (!this.sheet.complete) return;
+    if (p.inv > 0 && p.inv < 1.25 && Math.floor(sb.time * 14) % 2 === 0 && sb.state === 'play') return; // blink after a bump
+    const S = JACINTA_SHEET;
+    this.lastFrame = fr;
     g.save();
-    g.translate(sx(p.x), sy(p.y) - bob);
-    g.rotate(lean);
-    g.scale(scx * p.facing, scy);
-    g.drawImage(this.sprite, -anchorX, -S.h + 1);
+    g.translate(sx(p.x), sy(p.y));
+    g.scale(p.facing, 1);
+    g.drawImage(this.sheet, fr.col * S.cellW, fr.row * S.cellH, S.cellW, S.cellH, -S.anchorX, -S.anchorY, S.cellW, S.cellH);
     g.restore();
   }
 

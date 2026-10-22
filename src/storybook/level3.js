@@ -19,7 +19,7 @@ export const LEVEL3 = {
   retryCaption: 'Jacinta brushed off her knees, fixed her cape, and tried again!',
   stompTip: 'Boing! The beetle giggled, tucked in, and rolled away. 🐞',
   // Jacinta is taller than Pinky, so her body box is bigger
-  physics: { w: 28, h: 64, jump: 820 },
+  physics: { w: 28, h: 64, jump: 820, walk: 205, run: 340 },
   width: 7700,
   start: { x: 170, y: G },
   scrapStyle: 'map',
@@ -71,7 +71,7 @@ export const LEVEL3 = {
     { x: 4040, y: 230, w: 120, kind: 'branch' },
     { x: 4190, y: 160, w: 120, kind: 'branch' },
     { x: 4080, y: 92, w: 140, kind: 'island' },
-    { x: 5830, y: 220, w: 130, kind: 'island' },
+    { x: 5785, y: 220, w: 140, kind: 'island' },
     { x: 6480, y: 400, w: 70, kind: 'lily' },
   ],
   // moving platforms: leaf rafts on the river and a vine-hung lift

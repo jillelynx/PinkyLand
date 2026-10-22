@@ -1,0 +1,1 @@
+{"cellW": 98, "cellH": 110, "anchorX": 60, "anchorY": 108, "cols": 8, "rows": ["idle", "walk", "crouch", "run", "jump"], "faces": ["friendly", "determined"]}

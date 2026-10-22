@@ -84,6 +84,7 @@ const res = await page.evaluate((libSrc) => {
   const lift = sb.movers[2];
   ride(() => lift.cy > 285);
   chk('onto the vine lift', hop(5650, Math.round(lift.cy), { run: false }));
+  if (!(sb.p.standing && sb.p.standing.mover)) out.push('  (not on the lift: at ' + Math.round(sb.p.x) + ',' + Math.round(sb.p.y) + ')');
   ride(() => lift.cy < 165, 600);
   chk('lift to the cliff island', hop(5890, 220, { run: false }));
   chk('down to the ground', hop(6060, 440));
