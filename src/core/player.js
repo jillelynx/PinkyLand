@@ -11,6 +11,8 @@ export const AVATAR_STATS = {
   jacintaPack: { walk: 3.5, run: 6.4, jump: 8.4, gravity: 24, radius: 0.34, height: 1.3, eye: 1.05, swimDepth: 0.95 },
   liev: { walk: 3.8, run: 7.4, jump: 9.0, gravity: 24, radius: 0.32, height: 1.4, eye: 1.12, swimDepth: 1.0 },
   pinky: { walk: 3.2, run: 5.8, jump: 9.6, gravity: 17, radius: 0.36, height: 0.9, eye: 0.62, swimDepth: 0.4, floaty: true },
+  // Belly Button: a soft plush bear — a little slower, but big drops make him belly-bounce, and he floats on his back
+  bellybutton: { walk: 3.1, run: 5.6, jump: 8.4, gravity: 22, radius: 0.34, height: 1.15, eye: 0.9, swimDepth: 0.5, bellyBounce: true },
 };
 
 export class Player {
@@ -165,7 +167,7 @@ export class Player {
     // footsteps
     if (this.grounded && hs > 0.5 && !this.swimming) {
       this.stepTimer -= dt * (hs / 1.6);
-      if (this.stepTimer < 0) { this.stepTimer = 0.5; this.audio?.footstep(this.avatarKey === 'pinky'); }
+      if (this.stepTimer < 0) { this.stepTimer = 0.5; this.audio?.footstep(this.avatarKey === 'pinky' || this.avatarKey === 'bellybutton'); }
     }
     this.forwardMoving = wishLen > 0.2 && iz > 0.2;
   }
@@ -234,6 +236,13 @@ export class Player {
       const impact = -this.vel.y;
       this.pos.y = gh;
       if (!this.grounded && impact > 3) { this.onLand?.(impact); this.model.land?.(impact / 15); }
+      // a soft plush belly-bounces after a big drop
+      if (st.bellyBounce && !this.grounded && impact > 9) {
+        this.vel.y = impact * 0.42;
+        this.grounded = false;
+        this.events.bounce?.({});
+        return;
+      }
       this.vel.y = 0;
       this.grounded = true;
       // remember safe ground (not on water edge)

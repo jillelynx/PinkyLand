@@ -7,6 +7,7 @@ import { AudioEngine } from './core/audio.js';
 import { UI } from './ui/ui.js';
 import { Intro } from './scenes/intro.js';
 import { HomeLevel } from './scenes/home.js';
+import { BellyButton } from './world/dragons.js';
 import { EarthLevel } from './scenes/earth.js';
 import { PinkyLandLevel } from './scenes/pinkyland.js';
 import { Kid } from './characters/kid.js';
@@ -19,7 +20,7 @@ import css from './ui/ui.css';
 import { Storybook, storybookHasSave, LEVELS } from './storybook/storybook.js';
 
 const SAVE_KEY = 'pinky-land-save-v1';
-const ALL_AVATARS = ['jacintaPack', 'jacinta', 'pinky', 'liev'];
+const ALL_AVATARS = ['jacintaPack', 'jacinta', 'pinky', 'liev', 'bellybutton'];
 
 function freshState() {
   return {
@@ -118,7 +119,10 @@ export class Game {
     addCape(jac, jac.spine, new THREE.Vector3(0, jac.dims.torsoLen - 0.02, -0.14), 0.95);
     addCape(liev, liev.spine, new THREE.Vector3(0, liev.dims.torsoLen - 0.02, -0.14), 1.0);
     addCape(pinky, pinky.body, new THREE.Vector3(0, 0.84, -0.16), 1.0);
-    this.avatarModels = { jacinta: jac, jacintaPack: jac, liev, pinky };
+    // Belly Button the plush bear (playable in Pinky Land)
+    const bb = new BellyButton({ scale: 1.05 });
+    addCape(bb, bb.pose, new THREE.Vector3(0, 0.95, -0.27), 0.9);
+    this.avatarModels = { jacinta: jac, jacintaPack: jac, liev, pinky, bellybutton: bb };
   }
 
   // ---------------- Title ----------------
@@ -260,7 +264,7 @@ export class Game {
       if (key === 'liev') followers = ['jacinta'];
       else if (lievJoined) followers = ['liev'];
     } else {
-      followers = { jacintaPack: ['liev'], jacinta: ['pinky', 'liev'], pinky: ['jacinta', 'liev'], liev: ['jacinta', 'pinky'] }[key];
+      followers = { jacintaPack: ['liev'], jacinta: ['pinky', 'liev'], pinky: ['jacinta', 'liev'], liev: ['jacinta', 'pinky'], bellybutton: ['jacinta', 'pinky'] }[key];
     }
     // detach the old followers
     L.followers = [];
@@ -301,6 +305,18 @@ export class Game {
     this.state.avatar = key;
     L.player.root.remove(old.root);
     this.applyParty();
+    // Belly Button stays right where you left him (as himself, not a follower)
+    if (old === this.avatarModels.bellybutton && L.bellyButton) {
+      const nx = pos.x - Math.sin(L.player.yaw) * 1.3, nz = pos.z - Math.cos(L.player.yaw) * 1.3;
+      L.bellyButton.root.position.set(nx, L.world.groundHeight(nx, nz), nz);
+      L.bellyButton.wander = { x: nx, z: nz, r: 2.5 };
+    }
+    if (key === 'bellybutton' && L.bellyButton) {
+      // you become him: start from where he was standing, if he's close by
+      L.journalCheck?.('bellybutton', 'Belly Button');
+      L.meet?.('bellybutton');
+      this.ui.say('Squish! You’re Belly Button now. Big drops make him belly-bounce, and he floats on his back in the water!', 5);
+    }
     // put the previous character right beside you
     const f = this.followerCache.get(Object.entries(this.avatarModels).find(([k, m]) => m === old && this.followerCache.has(k))?.[0]);
     if (f) { L.scene.add(old.root); f.place(pos.x - Math.sin(L.player.yaw) * 1.2, pos.z - Math.cos(L.player.yaw) * 1.2); }
@@ -431,7 +447,7 @@ export class Game {
     if (hit('Tab', 'Pad_switch')) this.cycleAvatar();
     const lievJoined = (this.level.name !== 'earth' && this.level.name !== 'home') || this.state.earth?.liev;
     const avail = this.level.availableAvatars().filter((k) => k !== 'liev' || lievJoined);
-    ['Digit1', 'Digit2', 'Digit3', 'Digit4'].forEach((d, i) => { if (hit(d) && avail[i]) this.switchAvatar(avail[i]); });
+    ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].forEach((d, i) => { if (hit(d) && avail[i]) this.switchAvatar(avail[i]); });
   }
 
   loop() {

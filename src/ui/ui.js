@@ -6,6 +6,7 @@ const AVATAR_INFO = {
   jacinta: { face: '👧', name: 'Jacinta', desc: 'Curly hair, bear-ear hoodie, kind heart. Great at climbing and talking with friends.' },
   pinky: { face: '🩷', name: 'Pinky', desc: 'Bouncy and floaty! Pinky jumps higher and falls slower.' },
   liev: { face: '⚡', name: 'Liev', desc: 'Fastest runner and highest jumper. Lightning bolt hair!' },
+  bellybutton: { face: '🧸', name: 'Belly Button', desc: 'A soft, speckly plush bear. Big drops make him belly-bounce, and he floats on his back in the water. Plays in Pinky Land.' },
 };
 
 export class UI {
@@ -360,7 +361,7 @@ export class UI {
       return `<div class="char-card ${k === current ? 'active' : ''} ${ok ? '' : 'locked'}" data-k="${k}"><div class="big">${info.face}</div><h3>${info.name}</h3><div>${ok ? info.desc : 'Unlocks later in the story.'}</div>
         ${ok ? `<button class="big-btn ${k === current ? 'alt' : ''}" style="min-width:0;font-size:16px;padding:10px 16px;margin-top:10px">${k === current ? 'Playing now' : 'Play as ' + info.name.split(' ')[0]}</button>` : ''}</div>`;
     }).join('');
-    this._openPanel('chars', `<h2>Who do you want to be?</h2><div>Press <span class="key small">1</span>–<span class="key small">4</span> or <span class="key small">Tab</span> any time to switch.</div><div class="char-cards">${cards}</div>`);
+    this._openPanel('chars', `<h2>Who do you want to be?</h2><div>Press <span class="key small">1</span>–<span class="key small">5</span> or <span class="key small">Tab</span> any time to switch.</div><div class="char-cards">${cards}</div>`);
     this.panel.querySelectorAll('.char-card button').forEach((b) => b.addEventListener('click', () => {
       const k = b.closest('.char-card').dataset.k;
       this.game.switchAvatar(k);

@@ -473,7 +473,7 @@ export class PinkyLandLevel extends Level {
     bb.wander = { x: 9, z: -27, r: 3 };
     bb.speed = 0.8;
     this.bellyButton = bb;
-    this.addInteractable({ pos: () => bb.root.position, radius: 2.6, label: 'Talk to Belly Button', action: async () => {
+    this.addInteractable({ pos: () => bb.root.position, radius: 2.6, label: 'Talk to Belly Button', enabled: () => g.state.avatar !== 'bellybutton', action: async () => {
       this.journalCheck('bellybutton', 'Belly Button'); bb.model.playAction('wave', 1.8);
       await g.ui.dialogue(met('bellybutton') ? [
         line(NPCW('Belly Button', '#5a5862', 0.9), 'Hug time? Hug time! Squish. ♥'),
@@ -565,7 +565,7 @@ export class PinkyLandLevel extends Level {
     }
   }
 
-  availableAvatars() { return ['jacinta', 'pinky', 'jacintaPack', 'liev']; }
+  availableAvatars() { return ['jacinta', 'pinky', 'jacintaPack', 'liev', 'bellybutton']; }
 
   // When you first arrive, Pinky comes alive!
   async arrive() {
@@ -605,6 +605,8 @@ export class PinkyLandLevel extends Level {
       root.rotation.y = Math.atan2(CAMP.x - x, CAMP.z - z);
       model.anim.sit = true;
       model.anim.speed = 0;
+      model.anim.swim = false; // (a friend who just swam over must not stay in a swimming pose)
+      model.anim.grounded = true;
     };
     this.player.frozen = true;
     placeSitter(this.player.root, this.player.model, spots[0]);
@@ -670,7 +672,7 @@ export class PinkyLandLevel extends Level {
     if (this.dayNight.isNight() && !this.P.tent) return { text: 'It’s getting dark and chilly. Let’s go to the Cozy Camp and set up our tent!', target: new THREE.Vector3(CAMP.x, 2, CAMP.z) };
     if (!met('grandpuff')) return { text: 'Have you met Big Pinky? He’s the BIGGEST pinky. You can bounce on him!', target: this.grandpa.root.position.clone() };
     if (!met('dot')) return { text: 'Dot lives by Sparkle Pond and knows all about swimming.', target: this.dot.root.position.clone() };
-    if (!met('bellybutton')) return { text: 'Belly Button the plush bear is in the meadow near the Dream Door. Go say hi — he gives the best hugs!', target: this.bellyButton.root.position.clone() };
+    if (!met('bellybutton') && g.state.avatar !== 'bellybutton') return { text: 'Belly Button the plush bear is in the meadow near the Dream Door. Go say hi — he gives the best hugs!', target: this.bellyButton.root.position.clone() };
     if (!met('babypinky')) return { text: 'Baby Pinky — the littlest pinky — is hopping near Big Pinky.', target: this.baby.root.position.clone() };
     if (!met('dragon-ember')) return { text: 'A friendly dragon named Sir Ember naps in a cosy nest to the north-east. Go visit!', target: this.dragons[0].pos.clone() };
     {
@@ -723,6 +725,7 @@ export class PinkyLandLevel extends Level {
   }
 
   update(dt) {
+    if (this.bellyButton) this.bellyButton.root.visible = this.game.state.avatar !== 'bellybutton';
     this.baseUpdate(dt);
     const p = this.player.pos;
     this.game.state.lastPos = { x: p.x, z: p.z };

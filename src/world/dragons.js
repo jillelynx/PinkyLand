@@ -828,25 +828,67 @@ export class BellyButton {
       pivot.rotation.z = s * 0.25;
       this.inner.add(pivot); this.arms.push({ pivot, s });
       const foot = sphere(0.08, fabric, 1, 0.75, 1.5); foot.position.set(s * 0.13, 0.04, 0.12); this.inner.add(foot);
+      (this.feet = this.feet || []).push({ foot, s });
     }
     this.root.scale.setScalar(scale);
-    this.anim = { speed: 0, grounded: true, action: null, actionT: 0 };
+    // `pose` tips and squashes the whole plush; `inner` waddles inside it
+    this.pose = new THREE.Group();
+    this.root.add(this.pose);
+    this.pose.add(this.inner);
+    this.anim = { speed: 0, grounded: true, vy: 0, swim: false, sit: false, action: null, actionT: 0 };
     this.t = Math.random() * 10;
+    this.squash = 0;
+    this._sw = 0; this._sit = 0; this._air = 0;
+    this.body = this.pose; // where a cape gets attached
   }
   playAction(name, d = 1.5) { this.anim.action = name; this.anim.actionT = d; }
   setMood() {}
+  land(strength = 1) { this.squash = Math.min(1, 0.4 + strength * 0.6); }
   update(dt) {
     this.t += dt;
     const a = this.anim;
-    if (a.actionT > 0) a.actionT -= dt; else a.action = null;
-    const walk = Math.min(1, a.speed / 1.2);
-    // a happy waddle when walking, a soft sway when standing
-    this.inner.rotation.z = Math.sin(this.t * (walk ? 9 : 1.2)) * (walk ? 0.12 : 0.03);
-    this.inner.position.y = walk ? Math.abs(Math.sin(this.t * 9)) * 0.04 : 0;
-    const wave = a.action === 'wave';
+    if (a.actionT > 0) { a.actionT -= dt; if (a.actionT <= 0) a.action = null; }
+    const walk = a.grounded && !a.swim ? Math.min(1, a.speed / 2.4) : 0;
+    const k = (v, target, rate) => v + (target - v) * Math.min(1, dt * rate);
+    this._sw = k(this._sw, a.swim ? 1 : 0, 5);
+    this._sit = k(this._sit, a.sit ? 1 : 0, 6);
+    this._air = k(this._air, !a.grounded && !a.swim ? 1 : 0, 10);
+    this.squash = Math.max(0, this.squash - dt * 3.5);
+    const step = this.t * (6 + a.speed * 2.2);
+    // a happy side-to-side waddle when walking, a soft sway when standing still
+    this.inner.rotation.z = Math.sin(step) * 0.14 * walk + Math.sin(this.t * 1.2) * 0.03 * (1 - walk);
+    this.inner.position.y = Math.abs(Math.sin(step)) * 0.05 * walk;
+    this.inner.rotation.x = 0.08 * walk;
+    // little feet step forward and back
+    for (const { foot, s } of this.feet) {
+      foot.position.z = 0.12 + Math.sin(step + (s > 0 ? 0 : Math.PI)) * 0.08 * walk + this._sit * 0.12;
+      foot.position.y = 0.04 + Math.max(0, Math.sin(step + (s > 0 ? 0 : Math.PI))) * 0.04 * walk;
+    }
+    // squash on landing, stretch in the air, float on his back in the water
+    const sq = Math.sin(this.squash * Math.PI) * 0.22;
+    const stretch = Math.max(-1, Math.min(1, (a.vy || 0) / 10)) * this._air;
+    const sy = (1 - sq) * (1 + stretch * 0.12) * (1 - this._sit * 0.12) + Math.sin(this.t * 2) * 0.012;
+    const sx = (1 + sq * 0.6) * (1 - stretch * 0.05) * (1 + this._sit * 0.06);
+    this.pose.scale.set(sx, sy, sx);
+    // in the water he lies back with his big belly to the sky, paddling his feet
+    this.pose.rotation.x = -1.35 * this._sw + Math.sin(this.t * 1.8) * 0.05 * this._sw;
+    this.pose.position.set(0, 0.42 * this._sw - 0.1 * this._sit, -0.25 * this._sw);
+    this.pose.rotation.z = Math.sin(this.t * 1.5) * 0.08 * this._sw;
+    // arms: swing when walking, up in the air when jumping, paddle when swimming
+    const act = a.action;
     this.arms.forEach(({ pivot, s }) => {
-      pivot.rotation.z = s * (0.25 + (wave && s > 0 ? 1.9 + Math.sin(this.t * 12) * 0.4 : Math.sin(this.t * 1.5) * 0.05));
+      let z = 0.25 + Math.sin(this.t * 1.5) * 0.05;
+      let x = Math.sin(step + (s > 0 ? Math.PI : 0)) * 0.5 * walk;
+      z += this._air * 1.6;
+      z += this._sw * (0.9 + Math.sin(this.t * 4 + (s > 0 ? 0 : Math.PI)) * 0.5);
+      if (act === 'wave' && s > 0) z = 1.9 + Math.sin(this.t * 12) * 0.4;
+      if (act === 'cheer') z = 2.3 + Math.sin(this.t * 14) * 0.25;
+      if (act === 'hug') { z = 0.9; x = -1.2; }
+      if (act === 'give' || act === 'point') { if (s > 0) { z = 0.6; x = -1.4; } }
+      pivot.rotation.set(x, 0, s * z);
     });
+    if (act === 'cheer') this.inner.position.y += Math.abs(Math.sin(this.t * 9)) * 0.15;
+    if (act === 'sad') this.inner.rotation.x = 0.3;
   }
 }
 function at3(o, x, y, z) { o.position.set(x, y, z); return o; }
