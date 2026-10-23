@@ -48,10 +48,13 @@ const res = await page.evaluate((libSrc) => {
   for (let i = 0; i < 10; i++) step([]);
   let top2 = 999, d = false; step(['Space'], true); for (let i = 0; i < 120; i++) { const pr = !d && sb.p.vy > -60; if (pr) d = true; step(['Space'], pr); top2 = Math.min(top2, sb.p.y); if (sb.p.grounded && i > 3) break; }
   out.push(`jump height ${440 - top1}px, with double jump ${440 - top2}px`);
-  walk(470); chk('mossy stone', hop(575, 390, { run: false }));
-  walk(620); hop(720, 440, { run: false });
-  walk(800); chk('fallen log', hop(900, 400, { run: false }));
-  walk(1000); chk('over the first gap', hop(1250, 440));
+  walk(385); chk('over the cracked boulder onto the mossy stone', hop(575, 390, { run: false }));
+  walk(620); hop(690, 440, { run: false }); walk(712);
+  for (let i = 0; i < 400 && sb.p.x < 858; i++) step(['ArrowDown', 'ArrowRight']);
+  for (let i = 0; i < 10; i++) step([]);
+  chk('duck and crawl under the low log', { ok: sb.p.x > 855 && !sb.p.duck, x: Math.round(sb.p.x), y: Math.round(sb.p.y) });
+  chk('fallen log', hop(960, 400, { run: false }));
+  walk(1040); chk('over the first gap', hop(1250, 440));
   chk('stump', hop(1370, 380, { run: false })); hop(1480, 440, { run: false }); walk(1545);
   const raft = sb.movers[0];
   ride(() => raft.cx < 1584);
@@ -62,8 +65,11 @@ const res = await page.evaluate((libSrc) => {
   out.push('  scraps: ' + sb.run.scraps.join(','));
   chk('to island 3', hop(2140, 280));
   chk('to the far bank', hop(2420, 440));
-  walk(2690); chk('stone', hop(2790, 392, { run: false })); hop(2900, 440, { run: false });
-  walk(3050); chk('over the brambles', hop(3250, 440));
+  walk(2830);
+  for (let i = 0; i < 600 && sb.p.x < 3068; i++) step(['ArrowDown', 'ArrowRight']);
+  for (let i = 0; i < 10; i++) step([]);
+  chk('crawl through the log tunnel', { ok: sb.p.x > 3055 && !sb.p.duck, x: Math.round(sb.p.x), y: Math.round(sb.p.y) });
+  chk('over the brambles', hop(3250, 440));
   walk(3290);
   { const m = sb.level.bouncy[0]; step(['Space', 'ArrowRight'], true); let bounced = false;
     for (let i = 0; i < 200; i++) { if (m.squish > 0.5) bounced = true; step(bounced ? ['Space', ...(sb.p.x < 3490 ? ['ArrowRight'] : [])] : ['Space', ...(sb.p.x < 3372 ? ['ArrowRight'] : [])]); if (bounced && sb.p.grounded) break; }
@@ -77,7 +83,8 @@ const res = await page.evaluate((libSrc) => {
   chk('treetop island', hop(4150, 92, { run: false }));
   out.push('  scraps: ' + sb.run.scraps.join(','));
   hop(4420, 440, { run: false });
-  walk(4520); chk('log 2', hop(4620, 396, { run: false })); hop(4790, 440, { run: false });
+  walk(4520); chk('log 2', hop(4620, 396, { run: false })); hop(4720, 440, { run: false });
+  walk(4740); chk('over the cracked boulder', hop(4870, 440));
   walk(4930); out.push('  scraps after the secret ferns: ' + sb.run.scraps.join(','));
   walk(5040); chk('cliff 1', hop(5150, 380, { run: false })); chk('cliff 2', hop(5300, 320, { run: false })); chk('cliff 3', hop(5450, 260, { run: false }));
   walk(5510);

@@ -372,9 +372,14 @@ export class PixelJungle {
     for (const b of L.blocks) {
       if (sx(b.x + b.w) < -10 || sx(b.x) > VW + 10) continue;
       const overGround = L.ground.some((s) => b.x + b.w / 2 > s.x0 && b.x + b.w / 2 < s.x1);
-      const h = overGround ? b.h : b.h + 500;
+      const h = overGround || b.kind === 'lowlog' ? b.h : b.h + 500;
       const img = this._block(b.kind, b.w, h);
       g.drawImage(img, sx(b.x) - 2, sy(b.y) - 10);
+    }
+    // cracked boulders (break them with a punch or kick)
+    for (const r of L.breakables || []) {
+      if (r.broken || sx(r.x + r.w) < -10 || sx(r.x) > VW + 10) continue;
+      g.drawImage(this._boulder(r.w, r.h), sx(r.x) - 4, sy(r.y) - 4);
     }
     // one-way platforms
     for (const o of L.oneways) {
@@ -482,7 +487,7 @@ export class PixelJungle {
     A.wasGrounded = p.grounded;
     A.landT = Math.max(0, A.landT - dt);
     // --- her face: determined while running, in big jumps, near danger or after a bump
-    let reason = speed > 260 || p.spin > 0 || (p.inv > 0 && sb.state === 'play');
+    let reason = speed > 260 || p.spin > 0 || p.attack || p.slideT > 0 || (p.inv > 0 && sb.state === 'play');
     if (!reason) {
       for (const b of sb.bunnies) if (b.state === 'walk' && (b.x - p.x) * p.facing > -10 && Math.abs(b.x - p.x) < 150 && Math.abs(b.y - p.y) < 60) { reason = true; break; }
       if (!reason) for (const h of this.L.hazards) { const cx = h.x + h.w / 2; if ((cx - p.x) * p.facing > -10 && Math.abs(cx - p.x) < 140 && Math.abs(h.y - p.y) < 60) { reason = true; break; } }
@@ -502,6 +507,30 @@ export class PixelJungle {
       else if (p.vy < 430) col = 4;
       else col = 5;
       A.state = 'air';
+    } else if (p.slideT > 0) {
+      // duck slide: dive, then slide low
+      if (A.state !== 'slide') { A.state = 'slide'; A.t = 0; }
+      A.t += dt;
+      row = C.slide.row; col = A.t < 0.07 ? 2 : A.t < 0.2 ? 3 : 4;
+    } else if (p.attack) {
+      const a = p.attack, t = a.t;
+      row = C.attack.row;
+      if (a.kind === 'punch') col = t < 0.06 ? 1 : t < 0.24 ? 3 : 6;
+      else col = t < 0.06 ? 1 : t < 0.13 ? 2 : t < 0.32 ? 4 : t < 0.4 ? 5 : 6;
+      A.state = 'attack';
+    } else if (p.duck) {
+      if (A.state === 'slide') { A.state = 'duck'; A.t = 1; } // already low after a slide
+      if (A.state !== 'duck') { A.state = 'duck'; A.t = 0; A.dist = 0; }
+      A.t += dt;
+      row = C.crouch.row;
+      if (speed > 10) { A.dist += speed * dt; col = C.crouch.crawl[Math.floor(A.dist / C.crouch.crawlStepPx) % C.crouch.crawl.length]; }
+      else col = A.t < 0.06 ? 1 : 2;
+    } else if ((A.state === 'duck' || A.state === 'slide' || A.state === 'rise') && speed < 60) {
+      // getting back up
+      if (A.state !== 'rise') { A.riseRow = A.state === 'slide' ? C.slide.row : C.crouch.row; A.state = 'rise'; A.t = 0; }
+      A.t += dt;
+      row = A.riseRow; col = A.t < 0.07 ? 5 : 6;
+      if (A.t > 0.14) A.state = 'idle';
     } else if (A.landT > 0 && speed < 40) {
       row = C.jump.row; col = A.landHard && A.landT > C.landFrameTime ? 6 : 7; A.state = 'land';
     } else if (speed > 260) {
@@ -523,6 +552,7 @@ export class PixelJungle {
   drawHero(g, sb, sx, sy, dt) {
     const p = sb.p;
     const fr = this.pickFrame(sb, dt);
+    this.lastFrame = fr;
     if (!this.sheet.complete) return;
     if (p.inv > 0 && p.inv < 1.25 && Math.floor(sb.time * 14) % 2 === 0 && sb.state === 'play') return; // blink after a bump
     const S = JACINTA_SHEET;
@@ -615,9 +645,41 @@ export class PixelJungle {
   }
 
   // ------------------------------------------------ cached pieces
+  _boulder(w, h) {
+    return this._cached(`boulder-${w}-${h}`, w + 8, h + 6, (g) => {
+      const r = rng(w + h * 3);
+      const cx = 4 + w / 2, cy = 4 + h / 2 + 2;
+      ell(g, cx, cy + 1, w / 2 + 1, h / 2, PAL.stone[0]);
+      ell(g, cx, cy, w / 2, h / 2 - 1, PAL.stone[1]);
+      ell(g, cx - w * 0.12, cy - h * 0.14, w / 3, h / 3, PAL.stone[2]);
+      ell(g, cx - w * 0.2, cy - h * 0.25, w / 7, h / 9, PAL.stone[3]);
+      speckle(g, cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8, [PAL.stone[0], PAL.stone[3]], w * 2, r);
+      // big zig-zag cracks
+      g.fillStyle = '#2b2c27';
+      let x = cx - 2, y = cy - h / 2 + 3;
+      for (let i = 0; i < h - 8; i++) { g.fillRect(Math.round(x), Math.round(y), 2, 1); x += (i % 6 < 3 ? 1 : -1) * 0.8; y += 1; if (i === 12) { let x2 = x, y2 = y; for (let k = 0; k < 12; k++) { g.fillRect(Math.round(x2), Math.round(y2), 1, 1); x2 += 1; y2 += 0.6; } } }
+      // a little moss cap
+      ell(g, cx - 4, cy - h / 2 + 3, w / 4, 3, PAL.grass[1]);
+      g.fillStyle = PAL.grass[2]; g.fillRect(Math.round(cx - 8), Math.round(cy - h / 2 + 1), 8, 1);
+    });
+  }
+
   _block(kind, w, h) {
-    return this._cached(`b-${kind}-${w}-${h}`, w + 4, h + 12, (g) => {
+    return this._cached(`b-${kind}-${w}-${h}`, w + 4, h + (kind === 'lowlog' ? 28 : 12), (g) => {
       const r = rng(w * 7 + h);
+      if (kind === 'lowlog') {
+        // a huge fallen tree trunk resting high enough to crawl or slide under
+        for (let y = 0; y < h; y++) { const k = y / h; g.fillStyle = k < 0.15 ? PAL.bark[3] : k < 0.55 ? PAL.bark[2] : k < 0.85 ? PAL.bark[1] : PAL.bark[0]; g.fillRect(2, 10 + y, w, 1); }
+        for (let i = 0; i < w / 4; i++) { g.fillStyle = r() < 0.5 ? PAL.bark[0] : PAL.bark[3]; g.fillRect(2 + Math.floor(r() * (w - 10)), 12 + Math.floor(r() * (h - 6)), 8 + Math.floor(r() * 16), 1); }
+        // cut ends with tree rings
+        for (const ex of [4, w - 2]) { ell(g, ex, 10 + h / 2, 5, Math.floor(h / 2) - 1, '#c99a5f'); ell(g, ex, 10 + h / 2, 3, Math.floor(h / 3), '#e2bb7f'); ell(g, ex, 10 + h / 2, 1, Math.floor(h / 6), '#b07a45'); }
+        // moss on top, vines and roots hanging underneath
+        g.fillStyle = PAL.grass[1]; g.fillRect(0, 6, w + 4, 6);
+        g.fillStyle = PAL.grass[2]; g.fillRect(0, 6, w + 4, 2);
+        for (let x = 0; x < w + 4; x += 2) if (r() < 0.5) { g.fillStyle = PAL.grass[3]; g.fillRect(x, 2 + Math.floor(r() * 4), 1, 4); }
+        for (let x = 10; x < w - 6; x += 9 + Math.floor(r() * 8)) { const len = 3 + Math.floor(r() * 8); g.fillStyle = PAL.near[0]; g.fillRect(x, 10 + h - 1, 1, len); g.fillStyle = PAL.near[2]; g.fillRect(x - 1, 10 + h - 1 + len, 3, 2); }
+        return;
+      }
       if (kind === 'log') {
         for (let y = 0; y < h; y++) { const k = y / h; g.fillStyle = k < 0.25 ? PAL.bark[3] : k < 0.7 ? PAL.bark[2] : PAL.bark[1]; g.fillRect(2, 10 + y, w - 8, 1); }
         for (let i = 0; i < 18; i++) { g.fillStyle = PAL.bark[0]; g.fillRect(2 + Math.floor(r() * (w - 12)), 12 + Math.floor(r() * (h - 4)), 6 + Math.floor(r() * 12), 1); }
@@ -780,7 +842,7 @@ export class PixelJungle {
       g.fillStyle = PAL.bark[1]; g.fillRect(2, 27, 80, 1);
       g.fillStyle = '#ffe9b0';
       g.font = 'bold 8px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const lines = { arrows: ['<- -> walk', 'Shift = run'], jump: ['Space', 'jump!'], double: ['Space x2', 'double jump'], stomp: ['hop on', 'beetles'], bounce: ['mushroom', 'boing!'] }[kind] || ['', ''];
+      const lines = { punch: ['Z = punch', 'X = kick'], duck: ['hold Down', 'duck+crawl'], slide: ['move+Down', '= slide!'], arrows: ['<- -> walk', 'Shift = run'], jump: ['Space', 'jump!'], double: ['Space x2', 'double jump'], stomp: ['hop on', 'beetles'], bounce: ['mushroom', 'boing!'] }[kind] || ['', ''];
       g.fillText(lines[0], 42, 9, 76); g.fillText(lines[1], 42, 20, 76);
     });
   }

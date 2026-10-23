@@ -4,8 +4,7 @@ from PIL import Image
 import numpy as np
 from scipy import ndimage
 
-# run from the project folder:  python3 docs/tools/build_jacinta_sheet.py
-SRC = {'friendly': 'docs/art/jacinta_sheet_friendly_source.png', 'determined': 'docs/art/jacinta_sheet_determined_source.png'}
+SRC = {'friendly': '/tmp/claude-0/sheet/fr.png', 'determined': '/tmp/claude-0/sheet/det.png'}
 ROWS = [(0,168),(166,326),(322,482),(478,638),(636,800),(798,978),(975,1254)]
 CW = 1254/8
 SCALE = 0.56          # sheet art (~146 px tall) -> ~82 px tall in the game
@@ -40,8 +39,33 @@ def frames_of(path):
             out[(r,c)] = dict(img=f, y0=y0, bottom=ys.max()+1, xs=(xs.min(),xs.max()))
     return out
 
-data = {k: frames_of(p) for k,p in SRC.items()}
-USE_ROWS = [0,1,2,5,6]   # idle, walk, crouch, run, jump (slide/attack rows have no game mechanic yet)
+data = {'friendly': frames_of(SRC['friendly'])}
+def frames_like(path, ref):
+    # The determined sheet has the same poses in the same places, but a few wide frames
+    # touch each other there. Give every pixel to the friendly frame it is closest to.
+    a = np.array(Image.open(path).convert('RGBA'))
+    m = a[...,3] > 40
+    out = {}
+    for r,(y0,y1) in enumerate(ROWS):
+        keys_r = [k for k in ref if k[0]==r]
+        if not keys_r: continue
+        dists = []
+        for k in keys_r:
+            refm = ref[k]['img'][...,3] > 40
+            dists.append(ndimage.distance_transform_edt(~refm))
+        owner = np.argmin(np.stack(dists), axis=0)
+        near = np.min(np.stack(dists), axis=0) < 14
+        sub = m[y0:y1]
+        for i,k in enumerate(keys_r):
+            keep = sub & (owner==i) & near
+            if keep.sum() < 1500: continue
+            ys,xs = np.where(keep)
+            f = np.zeros((y1-y0, a.shape[1], 4), np.uint8)
+            f[keep] = a[y0:y1][keep]
+            out[k] = dict(img=f, y0=y0, bottom=ys.max()+1, xs=(xs.min(),xs.max()))
+    return out
+data['determined'] = frames_like(SRC['determined'], data['friendly'])
+USE_ROWS = [0,1,2,3,4,5,6]   # idle, walk, crouch, slide, attack, run, jump
 keys = sorted(k for k in set(data['friendly']) & set(data['determined']) if k[0] in USE_ROWS)
 # row ground lines (lowest boot of the grounded frames in each row)
 ground = {}
@@ -107,14 +131,14 @@ op = arr[alpha>0][:, :3].astype(float)
 rs = np.random.default_rng(1)
 samp = op[rs.choice(len(op), min(40000, len(op)), replace=False)]
 cent, _ = kmeans2(samp, 80, minit='++', seed=1, iter=25)
-flat = arr[...,:3].reshape(-1,3).astype(float)
-idx = np.argmin(((flat[:,None,:]-cent[None,:,:])**2).sum(-1), axis=1)
+flat = arr[...,:3].reshape(-1,3).astype(np.float32)
+idx = np.concatenate([np.argmin(((flat[i:i+20000,None,:]-cent[None,:,:].astype(np.float32))**2).sum(-1), axis=1) for i in range(0, len(flat), 20000)])
 rgbimg = Image.fromarray(np.clip(cent[idx],0,255).reshape(arr.shape[0],arr.shape[1],3).astype(np.uint8))
 print('palette colours', len(cent), file=sys.stderr)
 q = np.dstack([np.array(rgbimg), alpha]).astype(np.uint8)
 q[alpha==0] = 0
 final = Image.fromarray(q,'RGBA')
-final.save('assets/jacinta/jacinta_sheet.png', optimize=True)
-meta = dict(cellW=cellW, cellH=cellH, anchorX=AX, anchorY=AY, cols=8, rows=['idle','walk','crouch','run','jump'], faces=names)
-json.dump(meta, open('assets/jacinta/jacinta_sheet.json','w'))
+final.save('/tmp/claude-0/sheet/jacinta_sheet.png', optimize=True)
+meta = dict(cellW=cellW, cellH=cellH, anchorX=AX, anchorY=AY, cols=8, rows=['idle','walk','crouch','slide','attack','run','jump'], faces=names)
+json.dump(meta, open('/tmp/claude-0/sheet/meta.json','w'))
 print(json.dumps(meta))

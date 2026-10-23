@@ -1,1 +1,22 @@
-{"cellW": 98, "cellH": 110, "anchorX": 60, "anchorY": 108, "cols": 8, "rows": ["idle", "walk", "crouch", "run", "jump"], "faces": ["friendly", "determined"]}
+{
+ "cellW": 116,
+ "cellH": 110,
+ "anchorX": 60,
+ "anchorY": 108,
+ "cols": 12,
+ "rows": [
+  "idle",
+  "walk",
+  "crouch",
+  "slide",
+  "attack",
+  "run",
+  "jump"
+ ],
+ "faces": [
+  "friendly",
+  "determined"
+ ],
+ "rowsPerFace": 7,
+ "layout": "rows 0-6 friendly, 7-13 determined: idle, walk, crouch, slide, attack, run, jump"
+}

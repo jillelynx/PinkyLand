@@ -59,7 +59,9 @@ const res = await page.evaluate((libSrc) => {
     return `${name}: ${seq.slice(0, 40).join(' ')}`;
   };
   const out = [];
-  Object.assign(sb.p, { x: 200, y: 440, vx: 0, vy: 0, grounded: true, facing: 1 });
+  // an open stretch of ground with nothing in the way
+  sb.bunnies.length = 0; for (const r of sb.level.breakables || []) r.broken = true;
+  Object.assign(sb.p, { x: 3860, y: 440, vx: 0, vy: 0, grounded: true, facing: 1 });
   window.__snap = true;
   out.push(summary('idle 3s', seg('idle', () => { for (let i = 0; i < 180; i++) step([]); })));
   out.push(summary('walk 1.2s', seg('walk', () => { for (let i = 0; i < 72; i++) step(['ArrowRight']); })));
@@ -76,7 +78,7 @@ const res = await page.evaluate((libSrc) => {
   out.push(`landing frames shown while in the air: ${[...jp, ...dj].filter((r) => r.st === 'land' && !r.g).length} (should be 0)`);
   window.__snap = false;
   // walk into the brambles at 3120
-  Object.assign(sb.p, { x: 3000, y: 440, vx: 0, vy: 0, grounded: true, facing: 1, inv: 0 });
+  Object.assign(sb.p, { x: 3080, y: 440, vx: 0, vy: 0, grounded: true, facing: 1, inv: 0 });
   out.push(summary('walk toward brambles', seg('bramble', () => { for (let i = 0; i < 90; i++) step(['ArrowRight']); })));
   // foot sliding check: during the walk, how far she moves per frame change
   const w = rec.filter((r) => r.label === 'walk' && r.st === 'walk');

@@ -2,10 +2,18 @@
 
 ## Where things are
 - `docs/art/jacinta_sheet_friendly_source.png` and `jacinta_sheet_determined_source.png`: your original sprite sheets.
-- `assets/jacinta/jacinta_sheet.png`: the game-size frames (98 × 110 pixel boxes, 8 across). Rows 1–5 show her friendly face; rows 6–10 show the same poses with her determined face. In each group the rows are idle, walk, crouch, run, jump. `jacinta_sheet.json` lists the box size and where her feet go.
-- `src/storybook/jacintaSheet.js`: the same picture packed inside the game, plus the **easy settings**.
-- `src/storybook/pixelJungle.js` → `pickFrame()`: chooses her frame and face.
-- `docs/tools/build_jacinta_sheet.py`: rebuilds the game frames if you replace the source sheets.
+- `docs/art/jacinta_walk_run_source.png`: your second sheet (new walk and run).
+- `assets/jacinta/jacinta_sheet.png`: the game-size frames (116 × 110 pixel boxes, 12 across). Rows 1–7 show her friendly face; rows 8–14 show her determined face. In each group the rows are idle, walk, crouch/duck, slide, punch & kick, run, jump. The walk always uses the friendly walk from the new sheet, and the run always uses the determined run. `jacinta_sheet.json` lists the box size and where her feet go.
+
+## Controls (Chapter 3)
+- ← → to walk, Shift to run.
+- Space to jump; press Space again in the air to double jump.
+- ↓ to duck. Hold ↓ and use the arrows to crawl under low logs.
+- Press ↓ while moving to slide. If she ends the slide under a log, she stays low and crawls.
+- Z (or J) to punch, X (or K) to kick.
+- Punches, kicks, slides and crawling gently boop the friendly beetles out of the way. A punch or kick breaks the cracked boulders (or you can jump over them).
+
+The move settings (crawl speed, slide length, how low she gets) are in `src/storybook/level3.js` under `moves`.
 
 ## Changing speed
 In `src/storybook/jacintaSheet.js`:
@@ -24,5 +32,3 @@ She shows her **determined** face when:
 
 The rest of the time her face is **friendly**. `determinedHold` sets how long the determined face lingers afterward. To change the rules, edit the `reason` lines in `pickFrame()`.
 
-## Frames not used yet
-The slide row and the punch/kick row of your sheets aren't in the game yet, because Chapter 3 has no slide or attack move. They can be added along with those moves.

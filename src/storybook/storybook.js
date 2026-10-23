@@ -142,7 +142,8 @@ export class Storybook {
     this.buildScene();
     const spawnX = this.run.cp >= 0 ? L.checkpoints[this.run.cp].x : L.start.x;
     const spawnY = this.run.cp >= 0 ? (L.checkpoints[this.run.cp].y || 440) : L.start.y;
-    this.p = { x: spawnX, y: spawnY, vx: 0, vy: 0, facing: 1, grounded: true, coyote: 0, buffer: 0, inv: 0, standing: null, lastSafe: { x: spawnX, y: spawnY }, doubled: false, spin: 0 };
+    this.p = { x: spawnX, y: spawnY, vx: 0, vy: 0, facing: 1, grounded: true, coyote: 0, buffer: 0, inv: 0, standing: null, lastSafe: { x: spawnX, y: spawnY }, doubled: false, spin: 0, duck: false, slideT: 0, attack: null };
+    for (const r of L.breakables || []) r.broken = false;
     this.camX = spawnX; this.camY = spawnY - 120;
     this.time = 0;
     this.state = cp || L.intro !== 'birth' ? 'play' : 'birth'; // coming back to a saved game skips the opening
@@ -349,6 +350,7 @@ export class Storybook {
     const out = [];
     for (const g of L.ground) out.push({ x: g.x0, y: g.y, w: g.x1 - g.x0, h: 800 });
     for (const b of L.blocks) out.push(b);
+    for (const r of L.breakables || []) if (!r.broken) out.push(r);
     return out;
   }
 
@@ -437,18 +439,28 @@ export class Storybook {
     const jumpHit = inp.hit('Space', 'ArrowUp', 'KeyW', 'Pad_jump');
     if (inp.hit('KeyR')) { this.respawn(false); return; }
 
+    // extra explorer moves (Chapter 3): duck, crawl, slide, punch and kick
+    const MV = L.moves;
+    if (MV) this.updateMoves(dt, jumpHit);
+    const planted = MV && p.grounded && p.attack; // she plants her feet to punch or kick
+
     // horizontal movement with acceleration, braking and air control
-    const max = (running ? this.ph.run : this.ph.walk) * Math.abs(dir);
-    const target = dir * (running ? this.ph.run : this.ph.walk);
+    const speed = p.duck ? MV.crawl : (running ? this.ph.run : this.ph.walk);
+    const max = speed * Math.abs(dir);
+    const target = planted ? 0 : dir * speed;
     const acc = p.grounded ? (Math.sign(target) !== Math.sign(p.vx) && p.vx !== 0 ? this.ph.decel : this.ph.accel) : this.ph.airAccel;
-    if (Math.abs(dir) > 0.05) {
+    if (p.slideT > 0) {
+      // sliding: keeps going, slowly slowing down
+      const f = MV.slideFriction * dt;
+      p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f;
+    } else if (Math.abs(dir) > 0.05 && !planted) {
       p.vx += Math.sign(target - p.vx) * Math.min(Math.abs(target - p.vx), acc * dt);
-      p.facing = dir > 0 ? 1 : -1;
+      if (!p.attack) p.facing = dir > 0 ? 1 : -1;
     } else {
       const dec = (p.grounded ? this.ph.decel : this.ph.airAccel * 0.4) * dt;
       p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec;
     }
-    if (Math.abs(p.vx) > this.ph.run) p.vx = Math.sign(p.vx) * this.ph.run;
+    if (Math.abs(p.vx) > this.ph.run && !(p.slideT > 0)) p.vx = Math.sign(p.vx) * this.ph.run;
     void max;
 
     // jumping (coyote time + jump buffer + variable height)
@@ -480,11 +492,12 @@ export class Storybook {
       p.y += m.cy - m.py;
     }
 
+    const H = this.bodyH(); // shorter while ducking or sliding
     // move & collide horizontally
     const hw = this.ph.w / 2;
     p.x += p.vx * dt;
     for (const s of this.solids()) {
-      if (p.y > s.y + 0.5 && p.y - this.ph.h < s.y + s.h && p.x + hw > s.x && p.x - hw < s.x + s.w) {
+      if (p.y > s.y + 0.5 && p.y - H < s.y + s.h && p.x + hw > s.x && p.x - hw < s.x + s.w) {
         // small steps (like stairs) are climbed automatically
         if (p.grounded && p.y - s.y <= this.ph.stepUp) {
           p.y = s.y;
@@ -506,9 +519,9 @@ export class Storybook {
     p.grounded = false;
     p.standing = null;
     for (const s of this.solids()) {
-      if (p.x + hw > s.x + 2 && p.x - hw < s.x + s.w - 2 && p.y > s.y && p.y - this.ph.h < s.y + s.h) {
+      if (p.x + hw > s.x + 2 && p.x - hw < s.x + s.w - 2 && p.y > s.y && p.y - H < s.y + s.h) {
         if (p.vy >= 0 && prevY <= s.y + 6) { p.y = s.y; p.vy = 0; p.grounded = true; p.standing = s; }
-        else if (p.vy < 0) { p.y = s.y + s.h + this.ph.h; p.vy = 0; }
+        else if (p.vy < 0) { p.y = s.y + s.h + H; p.vy = 0; }
       }
     }
     if (p.vy >= 0) {
@@ -552,13 +565,13 @@ export class Storybook {
     // hazards
     p.inv = Math.max(0, p.inv - dt);
     for (const h of L.hazards) {
-      if (p.x + hw - 4 > h.x && p.x - hw + 4 < h.x + h.w && p.y > h.y + 4 && p.y - this.ph.h < h.y + h.h) this.hurt(p.x < h.x + h.w / 2 ? -1 : 1);
+      if (p.x + hw - 4 > h.x && p.x - hw + 4 < h.x + h.w && p.y > h.y + 4 && p.y - H < h.y + h.h) this.hurt(p.x < h.x + h.w / 2 ? -1 : 1);
     }
     // dust bunnies
     for (const b of this.bunnies) {
       if (b.state !== 'walk') continue;
       const bw = 40, bh = 38;
-      if (p.x + hw > b.x - bw / 2 && p.x - hw < b.x + bw / 2 && p.y > b.y - bh && p.y - this.ph.h < b.y) {
+      if (p.x + hw > b.x - bw / 2 && p.x - hw < b.x + bw / 2 && p.y > b.y - bh && p.y - H < b.y) {
         if (p.vy > 0 && prevY <= b.y - bh + 12) {
           p.vy = -(jumpHeld ? this.ph.bunnyBounceHeld : this.ph.bunnyBounce);
           b.state = 'puffed'; b.t = 0;
@@ -566,7 +579,8 @@ export class Storybook {
           this.burst(b.x, b.y - 20, '#d8d0e8', 18);
           this.pinky.land(0.6);
           if (!this._stompTipShown) { this._stompTipShown = true; this.tip(L.stompTip || (b.kind === 'snail' ? 'Boing! The snail giggled and slid off to nap. 🐌' : 'Achoo! The dust bunny sneezed and rolled away. 🙂'), 3); }
-        } else this.hurt(p.x < b.x ? -1 : 1);
+        } else if (p.slideT > 0 || p.attack || p.duck) this.boop(b);
+        else this.hurt(p.x < b.x ? -1 : 1);
       }
     }
 
@@ -574,7 +588,7 @@ export class Storybook {
     this.starObjs.forEach((s, i) => {
       if (!s) return;
       const [sx, sy] = L.stars[i];
-      if (Math.abs(sx - p.x) < 26 && sy > p.y - this.ph.h - 18 && sy < p.y + 14) {
+      if (Math.abs(sx - p.x) < 26 && sy > p.y - H - 18 && sy < p.y + 14) {
         this.scene.remove(s);
         this.starObjs[i] = null;
         this.run.stars.push(i);
@@ -587,7 +601,7 @@ export class Storybook {
     this.scrapObjs.forEach((g, i) => {
       if (!g) return;
       const sc = L.scraps[i];
-      if (Math.abs(sc.x - p.x) < 30 && sc.y > p.y - this.ph.h - 24 && sc.y < p.y + 20) {
+      if (Math.abs(sc.x - p.x) < 30 && sc.y > p.y - H - 24 && sc.y < p.y + 20) {
         this.scene.remove(g);
         this.scrapObjs[i] = null;
         this.run.scraps.push(sc.id);
@@ -634,6 +648,89 @@ export class Storybook {
     a.speed = Math.abs(p.vx) / 58;
     a.grounded = p.grounded;
     a.vy = -p.vy / 58;
+  }
+
+  // ---------------- explorer moves ----------------
+  bodyH() {
+    const p = this.p, MV = this.level.moves;
+    if (!MV) return this.ph.h;
+    return p.slideT > 0 ? MV.slideH : p.duck ? MV.duckH : this.ph.h;
+  }
+
+  // is there space above her to stand up (not under a low log)?
+  roomToStand() {
+    const p = this.p, hw = this.ph.w / 2;
+    for (const s of this.solids()) if (p.x + hw > s.x && p.x - hw < s.x + s.w && p.y > s.y + 0.5 && p.y - this.ph.h < s.y + s.h) return false;
+    return true;
+  }
+
+  updateMoves(dt, jumpHit) {
+    const p = this.p, inp = this.input, MV = this.level.moves;
+    const down = inp.down('ArrowDown', 'KeyS') || (inp.padState && inp.padState.ly > 0.6);
+    const downHit = inp.hit('ArrowDown', 'KeyS');
+    // slide: press down while running along the ground
+    if (p.grounded && !(p.slideT > 0) && !p.attack && downHit && Math.abs(p.vx) > MV.slideMin) {
+      p.slideT = MV.slideTime;
+      p.vx = Math.sign(p.vx) * Math.max(Math.abs(p.vx), MV.slideSpeed);
+      p.duck = false;
+      this.audio.footstep?.(true);
+      this.burst(p.x - p.facing * 12, p.y - 3, '#c9a26a', 8);
+      if (!this._slideTip) { this._slideTip = true; this.tip('Whoosh! A slide! 💨', 1.6); }
+    }
+    if (p.slideT > 0) {
+      p.slideT -= dt;
+      if (jumpHit || !p.grounded) p.slideT = 0; // jumping ends the slide
+      if (p.slideT <= 0 || Math.abs(p.vx) < 60) {
+        p.slideT = 0;
+        p.duck = p.grounded && (down || !this.roomToStand()); // stay low if a log is above her
+      }
+    } else if (p.grounded && down && !p.attack) {
+      p.duck = true;
+    } else if (p.duck && (!down || !p.grounded)) {
+      if (!p.grounded || this.roomToStand()) p.duck = false;
+    }
+    // punch (Z or J) and kick (X or K)
+    if (!p.attack && !(p.slideT > 0) && !p.duck) {
+      if (inp.hit('KeyZ', 'KeyJ')) p.attack = { kind: 'punch', t: 0, dur: 0.34, from: 0.06, to: 0.22, reach: 56, top: 52, bot: 22, done: new Set() };
+      else if (inp.hit('KeyX', 'KeyK')) p.attack = { kind: 'kick', t: 0, dur: 0.46, from: 0.13, to: 0.32, reach: 62, top: 44, bot: 4, done: new Set() };
+      if (p.attack) this.audio.jump?.(0.5);
+    }
+    if (p.attack) {
+      const a = p.attack;
+      a.t += dt;
+      if (a.t >= a.from && a.t <= a.to) this.strike(p.x, p.x + p.facing * a.reach, p.y - a.top, p.y - a.bot, a);
+      if (a.t >= a.dur) p.attack = null;
+    }
+    if (p.slideT > 0) this.strike(p.x - p.facing * 8, p.x + p.facing * 34, p.y - 28, p.y, null);
+  }
+
+  // a punch, kick or slide reaching something
+  strike(x0, x1, y0, y1, a) {
+    const lo = Math.min(x0, x1), hi = Math.max(x0, x1);
+    for (const b of this.bunnies) {
+      if (b.state !== 'walk') continue;
+      if (b.x + 18 > lo && b.x - 18 < hi && b.y - 26 < y1 && b.y > y0) this.boop(b);
+    }
+    if (!a) return;
+    for (const r of this.level.breakables || []) {
+      if (r.broken || a.done.has(r)) continue;
+      if (r.x + r.w > lo && r.x < hi && r.y < y1 && r.y + r.h > y0) {
+        a.done.add(r);
+        r.broken = true;
+        this.audio.stomp();
+        this.burst(r.x + r.w / 2, r.y + r.h / 2, '#9a9a90', 22);
+        this.burst(r.x + r.w / 2, r.y + r.h / 3, '#c8c8bc', 12);
+        if (!this._rockTip) { this._rockTip = true; this.tip(a.kind === 'kick' ? 'KICK! The cracked rock crumbled! 🪨' : 'POW! The cracked rock crumbled! 🪨', 2.2); }
+      }
+    }
+  }
+
+  // friendly beetles just giggle and roll away
+  boop(b) {
+    b.state = 'puffed'; b.t = 0;
+    this.audio.stomp();
+    this.burst(b.x, b.y - 20, '#9fd0ff', 14);
+    if (!this._boopTip) { this._boopTip = true; this.tip('Boop! The beetle giggled and rolled out of the way. 🐞', 2.6); }
   }
 
   // the first thing Pinky could land on below him
@@ -704,7 +801,7 @@ export class Storybook {
     setTimeout(() => {
       const x = this.run.cp >= 0 ? L.checkpoints[this.run.cp].x : L.start.x;
       const y = this.run.cp >= 0 ? (L.checkpoints[this.run.cp].y || 440) : L.start.y;
-      Object.assign(this.p, { x, y, vx: 0, vy: 0, inv: 1.2, lastSafe: { x, y } });
+      Object.assign(this.p, { x, y, vx: 0, vy: 0, inv: 1.2, lastSafe: { x, y }, duck: false, slideT: 0, attack: null });
       this.run.hp = 3;
       this.updateHUD();
       this.state = 'play';
@@ -837,7 +934,7 @@ export class Storybook {
         <button class="big-btn alt" data-act="checkpoint">Go back to the last checkpoint</button>
         <button class="big-btn alt" data-act="restart">Restart this chapter</button>
         <button class="big-btn alt" data-act="title">🏠 Main menu (progress is saved)</button>
-        <p style="font-size:14px;color:#8a6a9a">← → walk · Shift run · Space jump (hold for higher) · Space again in the air = double jump · R checkpoint</p>`);
+        <p style="font-size:14px;color:#8a6a9a">← → walk · Shift run · Space jump (hold for higher) · Space again in the air = double jump${this.level.moves ? ' · ↓ duck (↓ + arrows to crawl) · ↓ while moving = slide · Z punch · X kick' : ''} · R checkpoint</p>`);
     } else this.overlay.classList.add('hidden');
   }
 

@@ -20,6 +20,14 @@ export const LEVEL3 = {
   stompTip: 'Boing! The beetle giggled, tucked in, and rolled away. 🐞',
   // Jacinta is taller than Pinky, so her body box is bigger
   physics: { w: 28, h: 64, jump: 820, walk: 205, run: 340 },
+  // Jacinta's explorer moves: duck (hold Down), crawl (duck + arrows), slide (Down while
+  // moving), punch (Z / J) and kick (X / K). Ducking and sliding make her body box lower.
+  moves: { crawl: 75, duckH: 38, slideH: 30, slideTime: 0.55, slideSpeed: 400, slideMin: 180, slideFriction: 430 },
+  // cracked boulders: a punch or kick breaks them (you can also jump over)
+  breakables: [
+    { x: 430, y: 384, w: 52, h: 56, kind: 'boulder' },
+    { x: 4785, y: 384, w: 52, h: 56, kind: 'boulder' },
+  ],
   width: 7700,
   start: { x: 170, y: G },
   scrapStyle: 'map',
@@ -48,10 +56,12 @@ export const LEVEL3 = {
   ],
   // solid blocks (kind: stone = mossy rock, log = fallen log, stump)
   blocks: [
+    // low logs: duck and crawl, or slide, to get underneath
+    { x: 730, y: 300, w: 110, h: 94, kind: 'lowlog' },
+    { x: 2860, y: 300, w: 190, h: 94, kind: 'lowlog' },
     { x: 520, y: 390, w: 110, h: 50, kind: 'stone' },
-    { x: 860, y: 400, w: 170, h: 40, kind: 'log' },
+    { x: 905, y: 400, w: 150, h: 40, kind: 'log' },
     { x: 1330, y: 380, w: 90, h: 60, kind: 'stump' },
-    { x: 2740, y: 392, w: 100, h: 48, kind: 'stone' },
     { x: 4560, y: 396, w: 150, h: 44, kind: 'log' },
     { x: 5100, y: 380, w: 120, h: 60, kind: 'stone' },
     { x: 5240, y: 320, w: 120, h: 120, kind: 'stone' },
@@ -106,10 +116,10 @@ export const LEVEL3 = {
     { x: 7200, range: 90, kind: 'beetle' },
   ],
   stars: [
-    [330, 400], [390, 400], [450, 400], [575, 350], [700, 400], [760, 400],
+    [330, 400], [380, 400], [456, 340], [575, 350], [700, 400], [760, 400],
     [945, 360], [1140, 360], [1375, 340], [1480, 400],
     [1640, 380], [1760, 280], [1915, 150], [2000, 380], [2145, 240], [2260, 380],
-    [2460, 400], [2520, 400], [2790, 350], [3000, 400], [3240, 400],
+    [2460, 400], [2520, 400], [2905, 418], [2955, 418], [3005, 418], [3000, 400], [3240, 400],
     [3375, 300], [3375, 230], [3495, 190], [3710, 140], [3700, 320],
     [4100, 330], [4250, 260], [4100, 190], [4250, 120],
     [4440, 400], [4635, 355], [4800, 400], [4880, 400],
@@ -130,10 +140,12 @@ export const LEVEL3 = {
   // the giant climbing tree behind the branches
   bigTree: { x: 4160, w: 34, top: 110 },
   signs: [
-    { x: 300, kind: 'arrows' },
-    { x: 770, kind: 'jump' },
+    { x: 250, kind: 'arrows' },
+    { x: 355, kind: 'punch' },
+    { x: 672, kind: 'duck' },
     { x: 1460, kind: 'double' },
     { x: 2560, kind: 'stomp' },
+    { x: 2790, kind: 'slide' },
     { x: 3270, kind: 'bounce' },
   ],
   thoughts: [],
