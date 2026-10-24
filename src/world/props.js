@@ -554,6 +554,144 @@ export class Waterfall {
   }
 }
 
+// ---------------- Rock-hugging waterfall ----------------
+// Instead of a flat sheet hanging in the air, the falling water is a ribbon laid along the
+// ground itself: it starts on the stream at the top, pours over the lip, runs down the rock
+// face (always 0.14 m above it) and spreads out into the plunge pool. So it can never look
+// disconnected from the cliff or the pool. Mist drifts up from the pool and a rainbow hangs in it.
+export class RibbonWaterfall {
+  constructor(scene, { top, pool, height, waterLevel = 0, startY, halfWidth = [1.9, 2.6], steps = 64, rainbow = true }) {
+    this.group = new THREE.Group();
+    scene.add(this.group);
+    const dir = new THREE.Vector2(pool.x - top.x, pool.z - top.z);
+    const len = dir.length(); dir.normalize();
+    const side = new THREE.Vector2(-dir.y, dir.x);
+    // ground under the ribbon: also look a little uphill, so on the steep face it sits in front of the rock
+    const g = (x, z) => Math.max(height(x, z), height(x - dir.x * 0.3, z - dir.y * 0.3) - 0.05, waterLevel - 0.2) + 0.14;
+    const pos = [], uv = [], idx = [];
+    const cols = 9;
+    let dist = 0, prev = null;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = top.x + dir.x * len * t, cz = top.z + dir.y * len * t;
+      let cy = g(cx, cz);
+      const onTop = startY !== undefined && height(cx, cz) > startY - 0.9;
+      if (onTop) cy = Math.max(cy, startY); // stays level with the stream until it tips over the lip
+      if (prev) dist += Math.hypot(cx - prev[0], cy - prev[1], cz - prev[2]);
+      prev = [cx, cy, cz];
+      const hw = halfWidth[0] + (halfWidth[1] - halfWidth[0]) * t;
+      for (let k = 0; k < cols; k++) {
+        const u = k / (cols - 1), o = (u - 0.5) * 2 * hw;
+        const x = cx + side.x * o, z = cz + side.y * o;
+        let y = g(x, z);
+        if (onTop) y = Math.max(y, startY);
+        y = Math.max(y, cy - 0.25); // keep the ribbon in one smooth piece across
+        pos.push(x, y, z);
+        uv.push(u, dist);
+      }
+      if (i < steps) for (let k = 0; k < cols - 1; k++) { const b = i * cols + k; idx.push(b, b + cols, b + 1, b + 1, b + cols, b + cols + 1); }
+    }
+    for (let i = 1; i < uv.length; i += 2) uv[i] /= Math.max(dist, 0.001); // v: 0 at the top .. 1 at the pool
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    this.length = dist;
+    this.mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uNight: { value: 0 }, uLen: { value: dist / 10 } }]),
+      vertexShader: /* glsl */ `
+        #include <fog_pars_vertex>
+        varying vec2 vUv;
+        void main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+        }`,
+      fragmentShader: /* glsl */ `
+        #include <fog_pars_fragment>
+        uniform float uTime; uniform float uNight; uniform float uLen; varying vec2 vUv;
+        float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
+        void main(){
+          float v = vUv.y * uLen;
+          float s = vn(vec2(vUv.x * 14.0, v * 9.0 - uTime * 2.6)) * 0.6 + vn(vec2(vUv.x * 30.0, v * 20.0 - uTime * 4.0)) * 0.4;
+          float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
+          vec3 col = mix(vec3(0.45, 0.75, 0.9), vec3(0.87, 0.96, 1.0), smoothstep(0.35, 0.8, s));
+          // white churning foam where it lands
+          col = mix(col, vec3(0.95, 0.98, 1.0), smoothstep(0.8, 0.95, vUv.y) * 0.6);
+          col *= mix(1.0, 0.42, uNight);
+          float a = edge * (0.55 + 0.45 * s) * smoothstep(1.0, 0.86, vUv.y) * smoothstep(0.0, 0.03, vUv.y);
+          gl_FragColor = vec4(col, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+        }`,
+    });
+    this.mat.uniforms.uTime = sharedUniforms.uTime;
+    const sheet = new THREE.Mesh(geo, this.mat);
+    sheet.renderOrder = 7;
+    sheet.frustumCulled = false;
+    this.group.add(sheet);
+    // mist: little dots that rise and spread from the pool (moved on the graphics card)
+    const rand = makeRandom(140);
+    const n = 140, mp = new Float32Array(n * 3), seed = new Float32Array(n);
+    for (let i = 0; i < n; i++) { mp[i * 3] = pool.x + (rand() - 0.5) * 3.2; mp[i * 3 + 1] = waterLevel + 0.1; mp[i * 3 + 2] = pool.z + (rand() - 0.5) * 3.2; seed[i] = rand(); }
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(mp, 3));
+    mg.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+    this.mistMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.NormalBlending,
+      uniforms: { uTime: sharedUniforms.uTime, uScale: { value: window.innerHeight / 2 }, uNight: { value: 0 } },
+      vertexShader: /* glsl */ `
+        uniform float uTime, uScale; attribute float seed; varying float vA;
+        void main(){ float t = fract(uTime * (0.2 + seed * 0.2) + seed);
+          vec3 p = position + vec3((seed - 0.5) * 2.0 * t, t * 2.2, sin(seed * 40.0) * t);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+          gl_PointSize = uScale * (0.12 + t * 0.25) / -mv.z; vA = (1.0 - t) * 0.25; }`,
+      fragmentShader: /* glsl */ `
+        uniform float uNight; varying float vA;
+        void main(){ vec2 q = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(q)); a = a * a * vA;
+          if (a < 0.01) discard; gl_FragColor = vec4(vec3(0.9, 0.97, 1.0) * mix(1.0, 0.45, uNight), a); }`,
+    });
+    const mist = new THREE.Points(mg, this.mistMat);
+    mist.frustumCulled = false; mist.renderOrder = 8;
+    this.group.add(mist);
+    // a soft white foam ring on the pool where the water lands
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 5.5), new THREE.MeshBasicMaterial({ map: glowTexture(), color: '#ffffff', transparent: true, opacity: 0.28, depthWrite: false }));
+    foam.rotation.x = -Math.PI / 2; foam.position.set(pool.x, waterLevel + 0.04, pool.z); foam.renderOrder = 7;
+    this.foam = foam; this.group.add(foam);
+    // a little rainbow arc in the mist (daytime only)
+    this.rainbowMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+      uniforms: { uDay: { value: 1 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader: /* glsl */ `
+        uniform float uDay; varying vec2 vUv;
+        vec3 hue(float h){ return clamp(abs(mod(h*6.0+vec3(0,4,2),6.0)-3.0)-1.0, 0.0, 1.0); }
+        void main(){ float t = vUv.y; float a = smoothstep(0.0,0.15,t)*smoothstep(1.0,0.85,t);
+          gl_FragColor = vec4(hue(t*0.8), a*0.22*uDay); }`,
+    });
+    if (rainbow) {
+      const rb = new THREE.Mesh(new THREE.RingGeometry(2.2, 2.7, 40, 1, 0, Math.PI), this.rainbowMat);
+      rb.position.set(pool.x + dir.x * 0.6, waterLevel, pool.z + dir.y * 0.6);
+      rb.rotation.y = Math.atan2(dir.x, dir.y);
+      this.group.add(rb);
+    }
+    this.worldPos = new THREE.Vector3(pool.x, waterLevel, pool.z);
+    this.t = 0;
+  }
+
+  update(dt, night) {
+    this.t += dt;
+    this.mat.uniforms.uNight.value = night;
+    this.mistMat.uniforms.uNight.value = night;
+    this.rainbowMat.uniforms.uDay.value = 1 - night;
+    this.foam.material.opacity = 0.22 + Math.sin(this.t * 3) * 0.06;
+    this.foam.scale.setScalar(1 + Math.sin(this.t * 2.3) * 0.04);
+  }
+}
+
 // ---------------- Lily pads & lotus flowers ----------------
 export function createLilyPads(spots, waterLevel) {
   const g = new THREE.Group();

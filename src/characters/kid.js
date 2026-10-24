@@ -487,6 +487,38 @@ export class Kid {
       this.head.add(ear);
     }
 
+    // snorkel mask and tube: only shows while swimming (a see-through glass window over the eyes,
+    // a soft strap around the head, and a bright tube on the side that pokes up out of the water)
+    {
+      const sn = new THREE.Group();
+      const frameM = new THREE.MeshStandardMaterial({ color: kind === 'liev' ? '#2f7de1' : '#ff5fa2', roughness: 0.45 });
+      const glassM = new THREE.MeshStandardMaterial({ color: '#bfefff', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.38, depthWrite: false });
+      const frame = new THREE.Mesh(new THREE.TorusGeometry(headR * 0.42, headR * 0.07, 8, 24), frameM);
+      frame.scale.set(1.25, 0.8, 1); frame.position.set(0, headR * 0.12, headR * 0.93);
+      sn.add(frame);
+      const glass = new THREE.Mesh(new THREE.CircleGeometry(headR * 0.42, 24), glassM);
+      glass.scale.set(1.25, 0.8, 1); glass.position.set(0, headR * 0.12, headR * 0.96); glass.renderOrder = 8;
+      sn.add(glass);
+      // the strap goes around the BACK of the head (half a ring), from one side of the mask to the other
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(headR * 1.0, headR * 0.05, 6, 24, Math.PI), frameM);
+      strap.position.set(0, headR * 0.14, headR * 0.1);
+      strap.rotation.set(-Math.PI / 2 - 0.12, 0, 0);
+      sn.add(strap);
+      const tubeM = new THREE.MeshStandardMaterial({ color: '#ffd23a', roughness: 0.5 });
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(headR * 0.08, headR * 0.08, headR * 1.7, 10), tubeM);
+      tube.position.set(headR * 1.02, headR * 0.55, headR * 0.05); tube.rotation.z = -0.12;
+      sn.add(tube);
+      const bend = new THREE.Mesh(new THREE.TorusGeometry(headR * 0.22, headR * 0.08, 6, 10, Math.PI / 2), tubeM);
+      bend.position.set(headR * 0.82, -headR * 0.3, headR * 0.22); bend.rotation.set(0, -Math.PI / 2, Math.PI);
+      sn.add(bend);
+      const top = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.11, 8, 6), new THREE.MeshStandardMaterial({ color: '#ff8a3a' }));
+      top.position.set(headR * 1.12, headR * 1.4, headR * 0.05);
+      sn.add(top);
+      sn.visible = false;
+      this.head.add(sn);
+      this.snorkel = sn;
+    }
+
     // hair
     if (kind === 'jacinta') {
       const hairGeos = curlyHairGeometry(headR, rand, style);
@@ -782,6 +814,7 @@ export class Kid {
     const air = a.grounded ? 0 : 1;
     this._air = damp(this._air, air, 10, dt);
     this._sw = damp(this._sw, a.swim ? 1 : 0, 5, dt);
+    if (this.snorkel) this.snorkel.visible = this._sw > 0.35; // put the snorkel on in the water
     this._sit = damp(this._sit, a.sit ? 1 : 0, 5, dt);
 
     const sw = this._sw, sit = this._sit, ai = this._air * (1 - sw);

@@ -223,3 +223,13 @@ button { font-family: var(--round); cursor: pointer; }
 .dialogue.stargaze .choices button { font-size: 15px; padding: 8px 14px; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.18); color: #f1eeff; }
 .dialogue.stargaze .choices button:hover, .dialogue.stargaze .choices button.sel { background: rgba(255, 140, 190, 0.25); border-color: var(--pink); }
 .dialogue.stargaze .next { color: #a9a3d0; font-size: 12px; }
+
+/* free look at the sky: arrow buttons and a done button */
+.skylook { position: fixed; left: 0; right: 0; bottom: 18px; display: flex; align-items: flex-end; justify-content: center; gap: 22px; z-index: 40; pointer-events: none; padding: 0 16px; flex-wrap: wrap; }
+.skylook .sk-note { position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); width: min(560px, 90vw); text-align: center; background: rgba(14, 16, 38, 0.66); color: #ece8ff; border-radius: 16px; padding: 10px 16px; font-size: 16px; border: 1px solid rgba(255,255,255,0.15); }
+.skylook button { pointer-events: auto; background: rgba(14, 16, 38, 0.62); color: #f3efff; border: 2px solid rgba(255, 255, 255, 0.22); border-radius: 14px; font-size: 22px; min-width: 56px; height: 52px; cursor: pointer; user-select: none; touch-action: none; }
+.skylook button:active { background: rgba(255, 140, 190, 0.4); border-color: #ff8fc0; }
+.skylook .sk-pad { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.skylook .sk-row { display: flex; gap: 6px; }
+.skylook .sk-side { display: flex; flex-direction: column; gap: 8px; }
+.skylook .sk-side button { font-size: 16px; padding: 0 16px; }

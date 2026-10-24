@@ -4,7 +4,7 @@
 // Everything is "instanced" (one shape drawn many times) so it stays fast.
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { sharedUniforms } from './terrain.js';
+import { sharedUniforms, addUnderwaterLight } from './terrain.js';
 import { makeRandom, makeNoise2D } from '../util/noise.js';
 
 // ---------------------------------------------------------------- shared helpers
@@ -31,8 +31,9 @@ function reefMaterial({ sway = 0, swayFreq = 1.6, glow = 0.12, nightGlow = 0.35,
         totalEmissiveRadiance += diffuseColor.rgb * (${glow.toFixed(3)} + ${nightGlow.toFixed(3)} * uNight);`);
   };
   m.customProgramCacheKey = () => 'reef-' + key;
-  return m;
+  return addUnderwaterLight(m, 'reef-' + key);
 }
+export { reefMaterial };
 
 // give a geometry a vertex colour (white, or a gradient function of y)
 function paint(g, fn) {

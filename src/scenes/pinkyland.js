@@ -7,10 +7,11 @@ import { World } from '../world/world.js';
 import { Water } from '../world/water.js';
 import { Clouds } from '../world/clouds.js';
 import { createGrass, createFlowers, createTrees, createBushes, createRocks } from '../world/vegetation.js';
-import { Campfire, createTent, Waterfall, createLilyPads, createCoral, createSign } from '../world/props.js';
+import { Campfire, createTent, Waterfall, RibbonWaterfall, createLilyPads, createCoral, createSign } from '../world/props.js';
 import { Creatures } from '../world/creatures.js';
 import { Pillow, PINKY_LOOK } from '../characters/pinky.js';
 import { addSeaLife, addBioluminescence } from '../world/sealife.js';
+import { addReefFriends } from '../world/reefFriends.js';
 import { addForestFriends } from '../world/forestFriends.js';
 import { RideMixin } from './riding.js';
 import { makeFerry } from '../world/snowStuff.js';
@@ -24,6 +25,8 @@ const POND = { x: 22, z: 22, r: 15 };
 // Rainbow Falls: where the cliff face is (z) and where its stream starts
 const FALLS = { face: POND.z + 15, spring: POND.z + 31, lip: 10.18 };
 const CAMP = { x: -20, z: -6 };
+// coral reef mounds on the south shelf: [x, z, radius, top height]
+const REEF_MOUNDS = [[-14, 123, 4.5, -1.3], [0, 119, 5, -1.1], [12, 123, 4, -1.4], [-6, 129, 4, -1.5], [8, 130, 4.5, -1.6], [20, 117, 3.5, -1.5], [-22, 116, 4, -1.2]];
 const ARRIVE = { x: -4, z: -36 };
 // Moonview Cliff: a high headland on the east coast that looks out over the sea, where the
 // moon rises and the northern lights shimmer (and both are reflected in the water)
@@ -61,6 +64,11 @@ export class PinkyLandLevel extends Level {
     const south = smoothstep(-10, 40, z);
     const seaFloor = lerp(-10, -2.4 + n(x * 0.05, z * 0.05) * 0.6, south * (1 - smoothstep(R + 10, R + 40, r)));
     let h = lerp(seaFloor, land, mask);
+    // reef mounds: low rounded hills on the sea floor where the corals grow (tops 1.1–1.8 m under the water)
+    for (const [mx, mz, mr, mt] of REEF_MOUNDS) {
+      const q = ((x - mx) ** 2 + (z - mz) ** 2) / (mr * mr);
+      if (q < 1) h = Math.max(h, h + (mt - h) * (1 - q) ** 2);
+    }
     // the pond
     const pd = Math.hypot(x - POND.x, z - POND.z) + n(x * 0.08, z * 0.08) * 1.5;
     h = lerp(h, -3.8 + pd * 0.05, 1 - smoothstep(POND.r - 6, POND.r + 1, pd));
@@ -222,16 +230,27 @@ export class PinkyLandLevel extends Level {
     }
     this.scene.add(createLilyPads(pads, 0));
     // waterfall
-    const wf = new Waterfall(this.scene, { x: POND.x, z: FALLS.face + 0.7, top: FALLS.lip, bottom: -0.3, width: 4.0, yaw: Math.PI, bulge: 3.4, lipBack: 1.1 });
+    // the falling water follows the rock face from the stream on top down into the plunge pool
+    const wf = new RibbonWaterfall(this.scene, { top: { x: POND.x, z: FALLS.face + 2.6 }, pool: { x: POND.x, z: POND.z + 11.5 }, height: (x, z) => this.terrain.getHeight(x, z), startY: FALLS.lip + 0.04, halfWidth: [2.0, 2.7] });
+    this.fallsPool = new THREE.Vector3(POND.x, 0, POND.z + 12);
+    // mossy boulders around the falls and the plunge pool (low ones are fun to climb on)
+    const fallRocks = createRocks(this.terrain, [
+      { x: POND.x - 4.8, z: FALLS.face - 1.0, scale: 1.0 }, { x: POND.x + 4.9, z: FALLS.face - 0.8, scale: 1.1 },
+      { x: POND.x - 6.4, z: FALLS.face - 4.6, scale: 0.75 }, { x: POND.x + 6.6, z: FALLS.face - 4.9, scale: 0.85 },
+      { x: POND.x - 3.4, z: FALLS.face - 7.4, scale: 0.55, flat: true }, { x: POND.x + 3.1, z: FALLS.face - 7.8, scale: 0.6, flat: true },
+    ], { color: '#a9a3b8', seed: 41, mossy: 1 });
+    this.scene.add(fallRocks.group);
+    this.world.addColliders(fallRocks.colliders);
+    this.fallRockColliders = fallRocks.colliders;
     this.waterfalls.push(wf);
     this.landmarks.push({ x: POND.x, z: POND.z, icon: '💧', label: 'Sparkle Pond' }, { x: POND.x, z: POND.z + 16, icon: '🌈', label: 'Rainbow Falls' });
     // a stream on top of the cliff: clear blue water that flows from the spring to the lip
-    const sLen = FALLS.spring - (FALLS.face + 0.2);
+    const sLen = FALLS.spring - (FALLS.face + 2.2);
     const streamMat = makeStreamMaterial();
     this.streamMat = streamMat;
     const stream = new THREE.Mesh(new THREE.PlaneGeometry(4.4, sLen, 6, 24), streamMat);
     stream.rotation.x = -Math.PI / 2;
-    stream.position.set(POND.x, FALLS.lip + 0.02, FALLS.face + 0.2 + sLen / 2);
+    stream.position.set(POND.x, FALLS.lip + 0.02, FALLS.face + 2.2 + sLen / 2);
     stream.renderOrder = 5;
     this.scene.add(stream);
     // the little spring pool the stream bubbles out of
@@ -330,10 +349,17 @@ export class PinkyLandLevel extends Level {
     // the coral reef's sea life, and the pond that glows at night
     const sea = addSeaLife(this, { center: { x: 0, z: R + 14 }, inner: R - 6, outer: R + 36 });
     for (const c of sea.list) C.list.push(c);
+    // more reef animals: sea turtle, manta ray, jellyfish, clownfish, crabs, octopus, dolphins, seahorses
+    const reefSpots = [];
+    { const rr = makeRandom(88); for (let i = 0; i < 1500 && reefSpots.length < 160; i++) { const a = Math.PI * (0.15 + rr() * 0.7), r = R - 8 + rr() * 22; const x = Math.cos(a) * r, z = Math.sin(a) * r, h = this.terrain.getHeight(x, z); if (h < -0.8 && h > -4.5) reefSpots.push({ x, z, h }); } }
+    this.reefFriends = addReefFriends(this, { center: { x: 0, z: R + 6, inner: R - 8, outer: R + 16, dolphinR: R + 12 }, spots: reefSpots, quality: g.engine.q.grass ?? 1 });
+    for (const c of this.reefFriends.list) C.list.push(c);
+    this.updaters.push((dt) => this.reefFriends.update(dt));
     // squirrels and raccoons living among the trees
     const friends = addForestFriends(this, { trees: this.treeColliders, camp: CAMP, keepOut: [{ x: POND.x, z: POND.z, r: POND.r + 1.5 }, { x: CAMP.x, z: CAMP.z, r: 2.5 }, ...DRAGON_SPOTS.map((d) => ({ x: d.x, z: d.z, r: 7 }))] });
     for (const c of friends.list) C.list.push(c);
     this.__friends = friends;
+    this.bubbles = makeBubbles(this.scene);
     this.biolum = addBioluminescence(this.scene, { center: POND, radius: POND.r + 1, terrain: this.terrain });
 
     // ---- pinky friends
@@ -420,6 +446,72 @@ export class PinkyLandLevel extends Level {
     return [eye, look];
   }
 
+  // ---- free look at the sky: turn with the arrow keys (or W A S D, or the buttons on screen)
+  skyLook({ eye, yaw = 0, pitch = 0.4, note = '' }) {
+    const g = this.game;
+    g.ui.close?.();
+    return new Promise((resolve) => {
+      const el = document.createElement('div');
+      el.className = 'skylook';
+      el.innerHTML = `<div class="sk-note">${note || 'Look around the sky! Use the arrow keys or these buttons. Hold <b>T</b> to make time go faster.'}</div>
+        <div class="sk-pad">
+          <button data-d="up" title="Look up">▲</button>
+          <div class="sk-row"><button data-d="left" title="Turn left">◀</button><button data-d="down" title="Look down">▼</button><button data-d="right" title="Turn right">▶</button></div>
+        </div>
+        <div class="sk-side"><button class="sk-ff" title="Hold to speed up time">⏩ Hold to speed up time</button><button class="sk-done">✓ Done</button></div>`;
+      document.body.appendChild(el);
+      const hold = { up: 0, down: 0, left: 0, right: 0, ff: 0 };
+      el.querySelectorAll('[data-d]').forEach((b) => {
+        const d = b.dataset.d;
+        const on = (e) => { e.preventDefault(); hold[d] = 1; }, off = () => { hold[d] = 0; };
+        b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
+      });
+      const ff = el.querySelector('.sk-ff');
+      ff.addEventListener('pointerdown', (e) => { e.preventDefault(); hold.ff = 1; }); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) ff.addEventListener(ev, () => { hold.ff = 0; });
+      const finish = () => { if (!this.skyMode) return; el.remove(); this.skyMode = null; this.dayNight.speed = g.settings.timeSpeed || 1; resolve(); };
+      el.querySelector('.sk-done').addEventListener('click', finish);
+      this.skyMode = { eye: eye.clone(), yaw, pitch, hold, finish, el, t: 0 };
+    });
+  }
+
+  updateSkyLook(dt) {
+    const S = this.skyMode, inp = this.game.input;
+    if (!S) return;
+    S.t += dt;
+    const k = (...c) => c.some((x) => inp.keys.has(x));
+    const turn = (k('ArrowRight', 'KeyD') || S.hold.right ? 1 : 0) - (k('ArrowLeft', 'KeyA') || S.hold.left ? 1 : 0);
+    const tilt = (k('ArrowUp', 'KeyW') || S.hold.up ? 1 : 0) - (k('ArrowDown', 'KeyS') || S.hold.down ? 1 : 0);
+    S.yaw += turn * dt * 0.9;
+    S.pitch = clamp(S.pitch + tilt * dt * 0.7, -0.25, 1.45);
+    if (S.follow && !turn && !tilt) S.follow(S, dt); // e.g. keep the sun in view while it sets
+    const dir = new THREE.Vector3(Math.sin(S.yaw) * Math.cos(S.pitch), Math.sin(S.pitch), -Math.cos(S.yaw) * Math.cos(S.pitch));
+    this.rig.setOverride(S.eye, S.eye.clone().addScaledVector(dir, 50));
+    this.game.ui.setStargaze(true);
+    if (S.hold.ff || k('KeyT')) this.dayNight.speed = 60; else if (!this.game._ffOn) this.dayNight.speed = S.speed || this.game.settings.timeSpeed || 1;
+    if (S.t > 0.3 && (inp.pressed.has('Escape') || inp.pressed.has('Enter') || inp.pressed.has('KeyE') || inp.pressed.has('Space'))) S.finish();
+  }
+
+  // watch the sun rise in the east or set in the west, in a gentle time-lapse
+  async watchSun(kind, eye) {
+    const g = this.game;
+    g.ui.fade(true);
+    await new Promise((r) => setTimeout(r, 900));
+    this.dayNight.setTime(kind === 'set' ? 0.69 : 0.205);
+    g.ui.fade(false);
+    const p = this.skyLook({ eye, yaw: kind === 'set' ? -Math.PI / 2 : Math.PI / 2, pitch: 0.1,
+      note: kind === 'set' ? 'The sun is setting in the west… 🌅 Look around with the arrow keys. Hold <b>T</b> to go faster.' : 'Here comes the sun, rising in the east! 🌄 Look around with the arrow keys. Hold <b>T</b> to go faster.' });
+    this.skyMode.speed = 3;
+    // gently keep the sun in the middle of the view (unless you're looking around yourself)
+    this.skyMode.follow = (S, dt) => {
+      const sd = this.dayNight.sunDir;
+      const sy = Math.atan2(sd.x, -sd.z), sp = clamp(Math.asin(clamp(sd.y, -1, 1)) + 0.12, 0.02, 0.6);
+      S.yaw = angleDamp(S.yaw, sy, 0.6, dt);
+      S.pitch = damp(S.pitch, sp, 0.6, dt);
+    };
+    await p;
+    if (kind === 'rise') g.ui.say('Good morning, sunshine! ☀️', 3);
+  }
+
   async sitAtCliff() {
     const g = this.game;
     this.sitting = true;
@@ -444,9 +536,17 @@ export class PinkyLandLevel extends Level {
       const night = this.dayNight.nightAmount > 0.6;
       g.ui.setStargaze(night);
       const choices = night
-        ? [{ text: 'Watch the moon and the northern lights 🌙', value: 'watch' }, { text: 'Sleep until morning 🌅', value: 'sleep' }, { text: 'Get up and keep exploring', value: 'up' }]
-        : [{ text: 'Wait here until night falls 🌌', value: 'night' }, { text: 'Get up and keep exploring', value: 'up' }];
+        ? [{ text: 'Watch the moon and the northern lights 🌙', value: 'watch' }, { text: 'Look all around the sky 🔭', value: 'look' }, { text: 'Stay up and watch the sunrise over the sea 🌄', value: 'watchrise' }, { text: 'Sleep until morning 🌅', value: 'sleep' }, { text: 'Get up and keep exploring', value: 'up' }]
+        : [{ text: 'Watch the sun set 🌅', value: 'watchset' }, { text: 'Wait here until night falls 🌌', value: 'night' }, { text: 'Look all around the sky 🔭', value: 'look' }, { text: 'Get up and keep exploring', value: 'up' }];
       const c = await g.ui.dialogue([line(PINKY, night ? 'Look how the moon and the northern lights shimmer on the sea… it’s like there are two skies!' : 'This is the best spot on the whole island to watch the night sky over the sea.', { choices })]);
+      if (c === 'look' || c === 'watchset' || c === 'watchrise') {
+        const [ceye] = this.cliffView();
+        if (c === 'look') await this.skyLook({ eye: ceye, yaw: Math.atan2(D.x, -D.z) - 0.4, pitch: 0.3 });
+        else await this.watchSun(c === 'watchset' ? 'set' : 'rise', ceye);
+        const [e2, l2] = this.cliffView(); this.rig.setOverride(e2, l2);
+        if (c === 'watchrise') this.journalCheck('moonview', 'Moonview Cliff');
+        continue;
+      }
       if (c === 'night' || c === 'sleep') {
         g.ui.fade(true);
         await new Promise((r) => setTimeout(r, 1400));
@@ -862,9 +962,10 @@ export class PinkyLandLevel extends Level {
     const night = this.dayNight.isNight() || this.dayNight.nightAmount > 0.35;
     const choices = [];
     if (!this.P.tent) choices.push({ text: 'Set up the tent and sleeping bags ⛺', value: 'tent' });
-    if (night) choices.push({ text: 'Sleep until morning 🌅', value: 'sleep' });
-    else choices.push({ text: 'Rest until sunset 🌇', value: 'sunset' });
+    if (night) choices.push({ text: 'Sleep until morning 🌅', value: 'sleep' }, { text: 'Stay up and watch the sunrise 🌄', value: 'watchrise' });
+    else choices.push({ text: 'Rest until sunset 🌇', value: 'sunset' }, { text: 'Watch the sun set 🌅', value: 'watchset' });
     choices.push({ text: 'Look at the stars together ✨', value: 'stars' });
+    choices.push({ text: 'Look all around the sky 🔭', value: 'look' });
     choices.push({ text: 'Get up and keep exploring', value: 'up' });
     let done = false;
     while (!done) {
@@ -896,6 +997,11 @@ export class PinkyLandLevel extends Level {
           line(L, 'And that one looks like a soccer ball. Totally.'),
         ]);
         g.ui.setStargaze(false);
+        this.rig.setOverride(new THREE.Vector3(CAMP.x + 0.5, campH + 2.2, CAMP.z + 6.5), new THREE.Vector3(CAMP.x, campH + 0.8, CAMP.z));
+      } else if (c === 'look' || c === 'watchset' || c === 'watchrise') {
+        const eye = new THREE.Vector3(CAMP.x, campH + 2.6, CAMP.z + 1.2);
+        if (c === 'look') await this.skyLook({ eye, yaw: -0.3, pitch: 0.55 });
+        else { await this.watchSun(c === 'watchset' ? 'set' : 'rise', eye); done = c === 'watchrise'; }
         this.rig.setOverride(new THREE.Vector3(CAMP.x + 0.5, campH + 2.2, CAMP.z + 6.5), new THREE.Vector3(CAMP.x, campH + 0.8, CAMP.z));
       } else done = true;
     }
@@ -1008,7 +1114,27 @@ export class PinkyLandLevel extends Level {
   update(dt) {
     if (this.bellyButton) this.bellyButton.root.visible = this.game.state.avatar !== 'bellybutton';
     this.updateBigPinky(dt);
+    this.updateSkyLook(dt);
     if (this.streamMat) this.streamMat.uniforms.uNight.value = this.dayNight.nightAmount;
+    // "You found the waterfall!" the first time you get close to the plunge pool
+    if (this.fallsPool && !this._foundFalls && Math.hypot(this.player.pos.x - this.fallsPool.x, this.player.pos.z - this.fallsPool.z) < 8) {
+      this._foundFalls = true;
+      if (!this.game.state.journal.includes('rainbowfalls')) {
+        this.game.ui.toast('🌈', 'You found Rainbow Falls!');
+        this.game.audio.collect?.();
+        this.spawnBurst?.(this.fallsPool.clone().setY(1.5), '#9fe8ff');
+        this.journalCheck('rainbowfalls', 'Rainbow Falls');
+      }
+    }
+    // bubbles drift up around you underwater, and a one-time tip about the swim keys
+    if (this.bubbles) {
+      this.bubbles.material.uniforms.uCam.value.copy(this.rig.camera.position);
+      this.bubbles.visible = this.player.underwater;
+      if (this.player.underwater && !this.game.state.swimTip) {
+        this.game.state.swimTip = true;
+        this.game.ui.say('You’re underwater! Hold Space to swim up and Shift or X to dive. No need to hold your breath here! 🫧', 7);
+      }
+    }
     this.biolum?.update(this.player.pos);
     this.baseUpdate(dt);
     const p = this.player.pos;
@@ -1068,4 +1194,30 @@ function makeStreamMaterial() {
   });
   mat.uniforms.uTime = sharedUniforms.uTime;
   return mat;
+}
+
+// little bubbles that rise around the camera when you're under the water (moved on the graphics card)
+function makeBubbles(scene) {
+  const rand = makeRandom(260), n = 220;
+  const pos = new Float32Array(n * 3), seed = new Float32Array(n);
+  for (let i = 0; i < n; i++) { pos[i * 3] = (rand() - 0.5) * 16; pos[i * 3 + 1] = rand() * 5; pos[i * 3 + 2] = (rand() - 0.5) * 16; seed[i] = rand(); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: sharedUniforms.uTime, uScale: { value: window.innerHeight / 2 }, uCam: { value: new THREE.Vector3() }, uWL: { value: 0 } },
+    vertexShader: `uniform float uTime, uScale, uWL; uniform vec3 uCam; attribute float seed; varying float vA;
+      void main(){ vec3 b = position + vec3(sin(uTime * 2.0 + seed * 30.0) * 0.15, uTime * (0.4 + seed * 0.5), 0.0);
+        vec3 p = mod(b - uCam + vec3(8.0, 3.0, 8.0), vec3(16.0, 5.0, 16.0)) - vec3(8.0, 3.0, 8.0) + uCam;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        gl_PointSize = uScale * (0.02 + seed * 0.03) / -mv.z; vA = step(p.y, uWL - 0.05) * 0.8; }`,
+    fragmentShader: `varying float vA; void main(){ vec2 q = gl_PointCoord - 0.5; float d = length(q);
+      float a = (smoothstep(0.5, 0.35, d) * 0.6 + smoothstep(0.3, 0.0, length(q - vec2(-0.12, 0.12))) * 0.6) * vA;
+      if (a < 0.01) discard; gl_FragColor = vec4(vec3(0.75, 0.95, 1.0) * a, a); }`,
+  });
+  const p = new THREE.Points(g, m);
+  p.frustumCulled = false; p.renderOrder = 9; p.visible = false;
+  scene.add(p);
+  return p;
 }

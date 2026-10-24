@@ -10,6 +10,53 @@ export const sharedUniforms = {
 };
 
 // Adds wobbly underwater light patterns (caustics) to a standard material.
+// The dancing net of light on the sea floor (sunlight focused by the waves).
+export const CAUSTIC_GLSL = `
+  float causticLine(vec2 p, float t) {
+    vec2 i = p; float c = 1.0, inten = 0.005;
+    for (int n = 0; n < 4; n++) {
+      float tt = t * (1.0 - (3.5 / float(n + 1)));
+      i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+      c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
+    }
+    c /= 4.0; c = 1.17 - pow(c, 1.4);
+    return clamp(pow(abs(c), 8.0), 0.0, 1.0);
+  }`;
+
+// Add the light net (and a blue-green underwater tint) to any standard material, e.g. rocks,
+// corals and sea animals. Keeps whatever onBeforeCompile the material already had.
+export function addUnderwaterLight(material, key) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, r) => {
+    prev?.call(material, shader, r);
+    shader.uniforms.uTime = sharedUniforms.uTime;
+    shader.uniforms.uWaterLevel = sharedUniforms.uWaterLevel;
+    shader.uniforms.uUwNight = sharedUniforms.uNight;
+    if (!shader.vertexShader.includes('varying vec3 vUwPos')) shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vUwPos;')
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+        #ifdef USE_INSTANCING
+          vUwPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        #else
+          vUwPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        #endif`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec3 vUwPos; uniform float uTime; uniform float uWaterLevel; uniform float uUwNight;
+        ${CAUSTIC_GLSL}`)
+      .replace('#include <opaque_fragment>', `
+        float uw = smoothstep(uWaterLevel + 0.05, uWaterLevel - 0.35, vUwPos.y);
+        float dpt = clamp((uWaterLevel - vUwPos.y) / 7.0, 0.0, 1.0);
+        outgoingLight += causticLine(vUwPos.xz * 0.55, uTime * 0.5) * uw * (1.0 - dpt * 0.75) * (1.0 - uUwNight * 0.8)
+                       * vec3(0.6, 0.9, 0.95) * 0.35 * (0.4 + 0.6 * outgoingLight);
+        outgoingLight = mix(outgoingLight, outgoingLight * vec3(0.55, 0.85, 0.95), uw * (0.1 + dpt * 0.4));
+        #include <opaque_fragment>`);
+  };
+  const prevKey = material.customProgramCacheKey?.bind(material);
+  material.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|uw-' + key;
+  return material;
+}
+
 export function addCaustics(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = sharedUniforms.uTime;
@@ -23,16 +70,8 @@ export function addCaustics(material) {
         float cHash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         float tNoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
           return mix(mix(cHash(i), cHash(i+vec2(1,0)), u.x), mix(cHash(i+vec2(0,1)), cHash(i+vec2(1,1)), u.x), u.y); }
-        float caustic(vec2 p){
-          float t = uTime*0.6;
-          vec2 q = p;
-          float c = 0.0;
-          for(int i=0;i<3;i++){
-            q += vec2(sin(q.y*1.3+t+float(i)), cos(q.x*1.1-t*1.2+float(i)*1.7));
-            c += abs(sin(q.x)*sin(q.y));
-          }
-          return pow(1.0 - c/3.0, 4.0);
-        }`)
+        ${CAUSTIC_GLSL}
+        float caustic(vec2 p){ return causticLine(p, uTime * 0.5); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // gentle mottling so big areas of ground don't look like flat paint
         float m1 = tNoise(vWPos.xz*0.31), m2 = tNoise(vWPos.xz*1.3 + 7.0), m3 = tNoise(vWPos.xz*5.0);
@@ -49,7 +88,7 @@ export function addCaustics(material) {
           float k = caustic(vWPos.xz*0.55) * 1.6 + caustic(vWPos.xz*1.1+3.0)*0.6;
           float fade = smoothstep(0.0, 0.6, depthBelow) * (1.0 - smoothstep(4.0, 16.0, depthBelow));
           totalEmissiveRadiance += vec3(0.55, 0.85, 0.9) * k * fade * 0.16;
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(0.75,0.95,1.0), smoothstep(0.0, 6.0, depthBelow));
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(0.58,0.84,0.92), smoothstep(0.0, 5.0, depthBelow)); // sand looks blue-green under the water
         }`);
   };
   material.customProgramCacheKey = () => 'caustics2';

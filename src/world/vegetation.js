@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeRandom, makeNoise2D } from '../util/noise.js';
-import { sharedUniforms } from './terrain.js';
+import { sharedUniforms, addUnderwaterLight } from './terrain.js';
 
 export const playerUniform = { value: new THREE.Vector3(9999, 0, 9999) };
 
@@ -337,7 +337,7 @@ export function createTrees(terrain, spots, { seed = 5 } = {}) {
   return { group, colliders };
 }
 
-export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}) {
+export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8', mossy = 0 } = {}) {
   const rand = makeRandom(seed);
   const noise = makeNoise2D(seed + 5);
   const group = new THREE.Group();
@@ -345,7 +345,7 @@ export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}
   const base = new THREE.Color(color), moss = new THREE.Color('#7fa86a'), dark = base.clone().multiplyScalar(0.62), light = base.clone().lerp(new THREE.Color('#ffffff'), 0.18);
   // one solid, smooth, rounded stone per boulder (smooth shading so it never looks like
   // a pile of separate flat pieces), gently lumpy, flat underneath, darker low down with a little moss on top
-  const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.88, flatShading: false });
+  const mat = addUnderwaterLight(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.88, flatShading: false }), 'rock');
   const geos = [0, 1, 2, 3].map((k) => {
     let g = new THREE.IcosahedronGeometry(1, 4);
     g.deleteAttribute('normal'); g.deleteAttribute('uv');
@@ -368,7 +368,7 @@ export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}
       c.lerp(light, THREE.MathUtils.clamp((y - 0.3) / 0.5, 0, 1) * 0.6);
       const speck = noise(p.getX(i) * 6 + k, p.getZ(i) * 6 + p.getY(i) * 4) * 0.06;
       c.offsetHSL(0, 0, speck);
-      if (up > 0.7 && y > 0.4) c.lerp(moss, 0.35 * THREE.MathUtils.clamp((up - 0.7) / 0.25, 0, 1));
+      if (up > 0.55 - mossy * 0.2 && y > 0.4 - mossy * 0.3) c.lerp(moss, (0.35 + mossy * 0.45) * THREE.MathUtils.clamp((up - 0.55 + mossy * 0.2) / 0.3, 0, 1));
       col.push(c.r, c.g, c.b);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));

@@ -617,7 +617,7 @@ export class Game {
     const inp = this.input;
     const busy = this.ui.dialogueActive;
     if (inp.pressed.has('Escape') || inp.pressed.has('Pad_pause')) {
-      if (this.ui.open) this.ui.close(); else if (!busy) this.uiAction('settings');
+      if (this.ui.open) this.ui.close(); else if (!busy && !this.level?.skyMode) this.uiAction('settings');
     }
     if (busy) return;
     const hit = (...c) => c.some((k) => inp.pressed.has(k));
@@ -627,7 +627,7 @@ export class Game {
     const dn = this.level?.dayNight;
     if (dn) {
       const ff = inp.keys?.has('KeyT') && !this.ui.open;
-      dn.speed = ff ? 60 : this.settings.timeSpeed || 1;
+      if (!this.level.skyMode) dn.speed = ff ? 60 : this.settings.timeSpeed || 1;
       if (ff && !this._ffOn) this.ui.toast('⏩', 'Fast-forwarding time… let go of T to stop');
       this._ffOn = ff;
     }

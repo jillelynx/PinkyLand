@@ -129,7 +129,7 @@ export class Follower {
     this.root.rotation.y = this.yaw;
     const a = this.model.anim;
     a.speed = hs; a.run = hs > 4; a.grounded = this.grounded; a.vy = this.vy;
-    a.swim = swimming && hs > 0.3;
+    a.swim = swimming; // (also while treading water, so the snorkel stays on)
     this.model.update(dt);
   }
 }
