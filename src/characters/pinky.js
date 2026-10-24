@@ -157,6 +157,13 @@ export class Pillow {
     if (a.action === 'hug') { sx *= 1.08; sy *= 0.94; tilt = 0.25; }
     if (a.action === 'wave') roll += Math.sin(this.time * 10) * 0.2;
     if (a.sit) { tilt = -0.25; sy *= 0.92; sx *= 1.05; }
+    // lying down on his back (Big Pinky's belly-up nap: his tummy faces the sky)
+    const lie = a.lie || 0;
+    if (lie > 0.001) {
+      tilt = tilt * (1 - lie) - Math.PI / 2 * lie;
+      roll *= 1 - lie;
+      y = y * (1 - lie) + PINKY_LOOK.thickness * 0.5 * lie;
+    }
 
     this.body.position.y = y + (this._sw > 0.01 ? 0.25 * this._sw : 0);
     this.body.scale.set(sx, sy, sx);

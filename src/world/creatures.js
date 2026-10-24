@@ -63,7 +63,7 @@ export class Creatures {
       const clips = Object.fromEntries(g.animations.map((c) => [c.name, mixer.clipAction(c)]));
       let current = clips.Survey; current?.play();
       const c = {
-        name: 'Fox', journalKey: 'fox', object: holder, mixer,
+        name: 'Pax', journalKey: 'fox', object: holder, mixer,
         state: 'idle', timer: 2 + this.rand() * 3, target: new THREE.Vector2(), yaw: this.rand() * 6,
       };
       holder.position.set(area.x + (this.rand() - 0.5) * area.r, 0, area.z + (this.rand() - 0.5) * area.r);

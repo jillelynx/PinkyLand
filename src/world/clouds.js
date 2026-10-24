@@ -82,7 +82,9 @@ export class Clouds {
     const c = dayNight.current;
     // clouds pick up sunrise/sunset tints
     this.material.emissive.copy(c.horizon).lerp(new THREE.Color('#ffffff'), 0.45);
-    this.material.emissiveIntensity = 0.55 - night * 0.38;
+    this.material.emissiveIntensity = 0.55 - night * 0.5;
+    // at night the clouds turn dusky blue so the stars stay the stars of the show
+    this.material.color.set('#ffffff').lerp(new THREE.Color('#2c3352'), night * 0.85);
     this.bouncyMaterial.emissive.copy(this.material.emissive).lerp(new THREE.Color('#ffd6ec'), 0.3);
     this.bouncyMaterial.emissiveIntensity = 0.7 - night * 0.4;
     for (const m of this.sky) {

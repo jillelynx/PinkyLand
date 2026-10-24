@@ -158,7 +158,7 @@ export class DragonWing {
     shape.quadraticCurveTo(span * 0.1, -chord * 0.7, 0, -chord * 0.45);
     shape.lineTo(0, 0.1);
     const g = new THREE.ShapeGeometry(shape, 10);
-    g.rotateX(-Math.PI / 2); // lie flat: x = out, -z = back
+    g.rotateX(Math.PI / 2); // lie flat: x = out, the skin trails back toward -z (behind the bones)
     if (side < 0) { g.scale(-1, 1, 1); }
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: membrane, side: THREE.DoubleSide, roughness: 0.7 }));
     m.castShadow = true;
@@ -166,7 +166,7 @@ export class DragonWing {
     // arm and finger bones
     const bm = std(bone, { roughness: 0.5 });
     const boneTo = (a, b, r) => {
-      const A = new THREE.Vector3(a.x * side, 0.02, -a.y), B = new THREE.Vector3(b.x * side, 0.02, -b.y);
+      const A = new THREE.Vector3(a.x * side, 0.02, a.y), B = new THREE.Vector3(b.x * side, 0.02, b.y);
       const len = A.distanceTo(B);
       const c = mesh(new THREE.CylinderGeometry(r * 0.6, r, len, 8), bm);
       c.position.copy(A).add(B).multiplyScalar(0.5);
@@ -176,7 +176,7 @@ export class DragonWing {
     boneTo(new THREE.Vector2(0, 0.1), wrist, span * 0.035);
     for (const t of tips) boneTo(wrist, t, span * 0.018);
     const claw = mesh(new THREE.ConeGeometry(span * 0.03, span * 0.08, 8), std('#fff2d6'));
-    claw.position.set(wrist.x * side, 0.05, -wrist.y - 0.02); claw.rotation.x = -0.6;
+    claw.position.set(wrist.x * side, 0.05, wrist.y + 0.02); claw.rotation.x = 0.6;
     this.pivot.add(claw);
     this.flap = 0; this.fold = 1;
   }
@@ -369,15 +369,22 @@ export class WesternDragon {
     this.headPos = new THREE.Vector3();
   }
 
-  get canTalk() { return this.state === 'rest' && this.fly < 0.05; }
+  get canTalk() { return !this.ridden && this.state === 'rest' && this.fly < 0.05; }
   talkPos() { return this.pos; }
+  // where a rider sits: on his back, just in front of the wings
+  seat(out = new THREE.Vector3()) { this.root.updateMatrixWorld(true); return this.bodyG.localToWorld(out.set(0, 0.92, 0.55)); }
+  startRide() { this.ridden = true; this.state = 'ride'; this.rideFly = this.fly; this.rideBank = 0; }
+  endRide() { this.ridden = false; this.state = 'return'; this.root.rotation.z = 0; }
 
   update(dt, ctx) {
     this.t += dt;
     const W = this.world, P = ctx.playerPos;
     this.stateT -= dt;
     const homeY = W.terrainHeight(this.home.x, this.home.z);
-    if (this.state === 'rest') {
+    if (this.ridden) {
+      // a friend is riding: the level steers him (pos + yaw); he just flaps or walks
+      this.fly = damp(this.fly, this.rideFly, 3, dt);
+    } else if (this.state === 'rest') {
       this.fly = damp(this.fly, 0, 2, dt);
       this.pos.x = damp(this.pos.x, this.home.x, 1, dt); this.pos.z = damp(this.pos.z, this.home.z, 1, dt);
       this.pos.y = damp(this.pos.y, homeY, 2, dt);
@@ -412,6 +419,7 @@ export class WesternDragon {
     // keep clear of the ground while flying
     if (this.state !== 'rest') this.pos.y = Math.max(this.pos.y, W.terrainHeight(this.pos.x, this.pos.z));
     this.root.rotation.y = this.yaw;
+    this.root.rotation.z = this.ridden ? this.rideBank : 0;
     const f = this.fly;
     // body: lying down (resting) or stretched out (flying), breathing
     const breath = Math.sin(this.t * 1.6) * 0.03;
@@ -484,6 +492,14 @@ class SerpentDragon {
     this.headPos = start.clone();
     this.t = Math.random() * 10;
   }
+  // where a rider sits: on the back, a little way behind the head
+  seat(out = new THREE.Vector3()) {
+    const f = this.body.frames[Math.min(this.body.frames.length - 1, this.seatAt || 6)];
+    return out.copy(f.p).addScaledVector(f.up, f.r * 0.85);
+  }
+  rideYaw() { const t = this.body.frames[0].t; return Math.atan2(t.x, t.z); }
+  startRide() { this.ridden = true; }
+  endRide() { this.ridden = false; }
   syncBody() {
     this.trail.push(this.headPos);
     this.body.update(this.trail.spine);
@@ -537,7 +553,7 @@ export class ChineseDragon extends SerpentDragon {
     this.ang = Math.random() * 6;
     this.hAng = 0;
   }
-  get canTalk() { return this.blend > 0.85; }
+  get canTalk() { return !this.ridden && this.blend > 0.85; }
   talkPos() { return this.headPos; }
   update(dt, ctx) {
     this.t += dt;
@@ -557,7 +573,7 @@ export class ChineseDragon extends SerpentDragon {
     const hx = this.home.x + Math.cos(this.ang * 2.2) * 6, hz = this.home.z + Math.sin(this.ang * 2.2) * 6;
     const hy = W.terrainHeight(hx, hz) + 2.4 + Math.sin(this.t * 1.5) * 0.4;
     const target = _w.set(lerp(rx, hx, this.blend), lerp(ry, hy, this.blend), lerp(rz, hz, this.blend));
-    this.headPos.lerp(target, Math.min(1, dt * 1.5));
+    if (!this.ridden) this.headPos.lerp(target, Math.min(1, dt * 1.5));
     this.headPos.y = Math.max(this.headPos.y, W.terrainHeight(this.headPos.x, this.headPos.z) + 1.4);
     this.syncBody();
     // the body never dips into hills
@@ -614,7 +630,7 @@ export class FeatheredSerpent extends SerpentDragon {
     this.phase = 'roam'; this.phaseT = 30; this.blend = 0;
     this.ang = Math.random() * 6;
   }
-  get canTalk() { return this.blend > 0.85; }
+  get canTalk() { return !this.ridden && this.blend > 0.85; }
   talkPos() { return this.headPos; }
   update(dt, ctx) {
     this.t += dt;
@@ -630,7 +646,7 @@ export class FeatheredSerpent extends SerpentDragon {
     const hx = this.home.x + Math.cos(this.ang * 2) * 4.5, hz = this.home.z + Math.sin(this.ang * 2) * 4.5;
     const hy = Math.max(W.terrainHeight(hx, hz), this.home.top || 0) + 2.6 + Math.sin(this.t * 1.7) * 0.4;
     const target = _w.set(lerp(rx, hx, this.blend), lerp(ry, hy, this.blend), lerp(rz, hz, this.blend));
-    this.headPos.lerp(target, Math.min(1, dt * 1.6));
+    if (!this.ridden) this.headPos.lerp(target, Math.min(1, dt * 1.6));
     this.headPos.y = Math.max(this.headPos.y, W.terrainHeight(this.headPos.x, this.headPos.z) + 1.5);
     this.syncBody();
     const sp = this.trail.spine;
@@ -677,8 +693,9 @@ export class NordicSerpent extends SerpentDragon {
     this.tailFin = mesh(new THREE.ConeGeometry(0.4, 0.9, 4).scale(0.2, 1, 1), std('#7fe0d0', { side: THREE.DoubleSide }));
     scene.add(this.tailFin);
     this.phase = 'swim'; this.phaseT = 30; this.ang = 0; this.blend = 0;
+    this.seatAt = 3; // sit on her neck, above the waves
   }
-  get canTalk() { return this.blend > 0.85; }
+  get canTalk() { return !this.ridden && this.blend > 0.85; }
   talkPos() { return this.headPos; }
   update(dt, ctx) {
     this.t += dt;
@@ -691,9 +708,11 @@ export class NordicSerpent extends SerpentDragon {
     const L = this.loop;
     const sx = L.x + Math.cos(this.ang) * L.r, sz = L.z + Math.sin(this.ang) * L.r;
     const target = _w.set(lerp(sx, this.cove.x, this.blend), 0, lerp(sz, this.cove.z, this.blend));
-    this.headPos.x += (target.x - this.headPos.x) * Math.min(1, dt * 1.2);
-    this.headPos.z += (target.z - this.headPos.z) * Math.min(1, dt * 1.2);
-    this.headPos.y = wl + lerp(0.9, 1.6, this.blend) + Math.sin(this.t * 1.6) * 0.15;
+    if (!this.ridden) {
+      this.headPos.x += (target.x - this.headPos.x) * Math.min(1, dt * 1.2);
+      this.headPos.z += (target.z - this.headPos.z) * Math.min(1, dt * 1.2);
+    } else this.blend = damp(this.blend, 0, 2, dt);
+    this.headPos.y = wl + lerp(this.ridden ? 1.1 : 0.9, 1.6, this.blend) + Math.sin(this.t * 1.6) * 0.15;
     this.trail.push(this.headPos);
     // humps: the body rises above the waves and dips below as she swims
     const sp = this.trail.spine;

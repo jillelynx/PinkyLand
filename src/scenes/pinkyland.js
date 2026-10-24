@@ -10,12 +10,16 @@ import { createGrass, createFlowers, createTrees, createBushes, createRocks } fr
 import { Campfire, createTent, Waterfall, createLilyPads, createCoral, createSign } from '../world/props.js';
 import { Creatures } from '../world/creatures.js';
 import { Pillow, PINKY_LOOK } from '../characters/pinky.js';
+import { addSeaLife, addBioluminescence } from '../world/sealife.js';
+import { addForestFriends } from '../world/forestFriends.js';
 import { NPC } from '../characters/npc.js';
 import { WesternDragon, ChineseDragon, FeatheredSerpent, NordicSerpent, BellyButton, addDragonWings } from '../world/dragons.js';
-import { makeNoise2D, makeRandom, smoothstep, fbm, lerp } from '../util/noise.js';
+import { makeNoise2D, makeRandom, smoothstep, fbm, lerp, clamp, damp, angleDamp } from '../util/noise.js';
 
 const R = 118;
 const POND = { x: 22, z: 22, r: 15 };
+// Rainbow Falls: where the cliff face is (z) and where its stream starts
+const FALLS = { face: POND.z + 15, spring: POND.z + 31, lip: 10.35 };
 const CAMP = { x: -20, z: -6 };
 const ARRIVE = { x: -4, z: -36 };
 // homes of the friendly dragons (kept clear of trees)
@@ -23,6 +27,14 @@ const EMBER_HOME = { x: 50, z: -46 };
 const LANTERN_HILL = { x: -62, z: -50 };
 const SUN_STEPS = { x: 60, z: 16 };
 const DRAGON_SPOTS = [EMBER_HOME, LANTERN_HILL, SUN_STEPS];
+// Jacinta's Dragon Quest: every kind of dragon to find (Frost lives on Snowdrop Island)
+export const DRAGON_KINDS = [
+  { key: 'dragon-ember', name: 'Sir Ember', kind: 'Castle-story dragon' },
+  { key: 'dragon-long', name: 'Lóng Mei', kind: 'Chinese dragon' },
+  { key: 'dragon-quetzi', name: 'Quetzi', kind: 'Feathered serpent' },
+  { key: 'dragon-fjola', name: 'Fjola', kind: 'Sea serpent' },
+  { key: 'dragon-frost', name: 'Frost', kind: 'Snow dragon' },
+];
 const PINKY = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
 const J = { who: 'Jacinta', color: '#ff6fa8', pitch: 1.2 };
 const L = { who: 'Liev', color: '#2f7de1', pitch: 0.95 };
@@ -49,9 +61,17 @@ export class PinkyLandLevel extends Level {
     // the pond
     const pd = Math.hypot(x - POND.x, z - POND.z) + n(x * 0.08, z * 0.08) * 1.5;
     h = lerp(h, -3.8 + pd * 0.05, 1 - smoothstep(POND.r - 6, POND.r + 1, pd));
-    // waterfall cliff north of the pond
-    const cliff = smoothstep(POND.z + 13, POND.z + 17, z) * (1 - smoothstep(14, 26, Math.abs(x - POND.x))) * (1 - smoothstep(66, 80, z));
+    // a deep plunge pool where Rainbow Falls lands, joined to the pond
+    const poolD = Math.hypot((x - POND.x) * 0.8, z - (POND.z + 13));
+    h = lerp(h, Math.min(h, -2.2), 1 - smoothstep(3.0, 7.0, poolD));
+    // waterfall cliff north of the pond: a steep rock face right behind the pool
+    const cliff = smoothstep(FALLS.face - 0.6, FALLS.face + 0.6, z) * (1 - smoothstep(14, 26, Math.abs(x - POND.x))) * (1 - smoothstep(66, 80, z));
     h = Math.max(h, lerp(h, 10.5 + n(x * 0.1, z * 0.1) * 0.4, cliff));
+    // the stream's channel across the top of the cliff, starting at a little spring
+    const along = smoothstep(FALLS.face + 0.4, FALLS.face + 1.2, z) * (1 - smoothstep(FALLS.spring - 0.5, FALLS.spring + 2.5, z));
+    const chan = (1 - smoothstep(1.3, 2.4, Math.abs(x - POND.x))) * along;
+    const spring = 1 - smoothstep(2.0, 3.4, Math.hypot(x - POND.x, z - FALLS.spring));
+    h = lerp(h, Math.min(h, 10.05), Math.max(chan, spring * cliff));
     // flat cozy spots
     const camp = 1 - smoothstep(5, 10, Math.hypot(x - CAMP.x, z - CAMP.z));
     h = lerp(h, 2.1, camp);
@@ -66,6 +86,7 @@ export class PinkyLandLevel extends Level {
     const noise = this.noise;
     const rand = makeRandom(21);
     this.setupSky(g.state.time ?? 0.34);
+    this.dayNight.setStarShow(true); // Milky Way, shooting stars, northern lights
 
     const sand = new THREE.Color('#f6e1c3'), wetSand = new THREE.Color('#d9c09a');
     const grassA = new THREE.Color('#68b955'), grassB = new THREE.Color('#8cc962'), meadowPink = new THREE.Color('#e9b8d8');
@@ -139,6 +160,7 @@ export class PinkyLandLevel extends Level {
     const trees = createTrees(this.terrain, treeSpots, { seed: 7 });
     this.scene.add(trees.group);
     this.world.addColliders(trees.colliders);
+    this.treeColliders = trees.colliders;
     const bushSpots = [];
     for (let i = 0; i < 90; i++) {
       const x = (rand() - 0.5) * 220, z = (rand() - 0.5) * 220;
@@ -178,15 +200,27 @@ export class PinkyLandLevel extends Level {
     }
     this.scene.add(createLilyPads(pads, 0));
     // waterfall
-    const wf = new Waterfall(this.scene, { x: POND.x, z: POND.z + 14.2, top: 10.6, bottom: -0.1, width: 4.2, yaw: Math.PI });
+    const wf = new Waterfall(this.scene, { x: POND.x, z: FALLS.face + 0.7, top: FALLS.lip, bottom: -0.3, width: 3.6, yaw: Math.PI, bulge: 3.4, lipBack: 0.9 });
     this.waterfalls.push(wf);
     this.landmarks.push({ x: POND.x, z: POND.z, icon: '💧', label: 'Sparkle Pond' }, { x: POND.x, z: POND.z + 16, icon: '🌈', label: 'Rainbow Falls' });
     // a stream on top of the cliff leading to the falls
-    const stream = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 18, 4, 20), wf.mat);
+    const sLen = FALLS.spring - (FALLS.face + 0.4);
+    const stream = new THREE.Mesh(new THREE.PlaneGeometry(3.2, sLen, 4, 20), wf.mat);
     stream.rotation.x = -Math.PI / 2;
-    stream.position.set(POND.x, 10.75, POND.z + 24);
+    stream.position.set(POND.x, FALLS.lip + 0.02, FALLS.face + 0.4 + sLen / 2);
     stream.renderOrder = 6;
     this.scene.add(stream);
+    // the little spring pool the stream bubbles out of
+    const springPool = new THREE.Mesh(new THREE.CircleGeometry(2.9, 28), wf.mat);
+    springPool.rotation.x = -Math.PI / 2;
+    springPool.position.set(POND.x, FALLS.lip + 0.03, FALLS.spring);
+    springPool.renderOrder = 6;
+    this.scene.add(springPool);
+    rockSpots.length = 0;
+    for (const [dx, dz, sc] of [[-3.4, 1.2, 1.1], [3.1, 0.6, 0.9], [-1.5, 3.4, 0.8], [2.0, 3.1, 1.0], [-3.4, -1.8, 0.7], [3.4, -1.6, 0.75]]) rockSpots.push({ x: POND.x + dx, z: FALLS.spring + dz, scale: sc });
+    const springRocks = createRocks(this.terrain, rockSpots, { color: '#b9a9c9', seed: 21 });
+    this.scene.add(springRocks.group);
+    this.world.addColliders(springRocks.colliders);
 
     // reef
     const coralSpots = [];
@@ -255,7 +289,7 @@ export class PinkyLandLevel extends Level {
     // ---- creatures
     this.creatures = new Creatures(this.scene, this.world, g.models);
     const C = this.creatures;
-    C.addFox({ area: { x: -10, z: 4, r: 26 }, count: 2 });
+    C.addFox({ area: { x: -10, z: 4, r: 26 }, count: 1 }); // Pax the fox
     C.addHorses({ center: { x: -6, z: -4 }, radius: 34, count: 2, wings: true });
     C.addWingedHorses({ center: { x: 10, z: 0 }, radius: 55, height: 20, count: 3 });
     C.addFlyers('flamingo', { center: { x: POND.x, z: POND.z }, radius: 26, height: 14, count: 5, scale: 0.013, speed: 0.22, journalKey: 'flamingo', name: 'Flamingo' });
@@ -266,6 +300,14 @@ export class PinkyLandLevel extends Level {
     C.addButterflies({ center: { x: 0, z: -6 }, radius: 40, count: 22, getHeight: (x, z) => Math.max(0, this.terrain.getHeight(x, z)) });
     C.addFireflies({ center: { x: 0, z: 0 }, radius: 50, count: 260, getHeight: (x, z) => this.terrain.getHeight(x, z) });
     C.addFireflies({ center: { x: POND.x, z: POND.z }, radius: 18, count: 120, getHeight: (x, z) => this.terrain.getHeight(x, z) });
+    // the coral reef's sea life, and the pond that glows at night
+    const sea = addSeaLife(this, { center: { x: 0, z: R + 14 }, inner: R - 6, outer: R + 36 });
+    for (const c of sea.list) C.list.push(c);
+    // squirrels and raccoons living among the trees
+    const friends = addForestFriends(this, { trees: this.treeColliders, camp: CAMP, keepOut: [{ x: POND.x, z: POND.z, r: POND.r + 1.5 }, { x: CAMP.x, z: CAMP.z, r: 2.5 }, ...DRAGON_SPOTS.map((d) => ({ x: d.x, z: d.z, r: 7 }))] });
+    for (const c of friends.list) C.list.push(c);
+    this.__friends = friends;
+    this.biolum = addBioluminescence(this.scene, { center: POND, radius: POND.r + 1, terrain: this.terrain });
 
     // ---- pinky friends
     this.buildPinkies();
@@ -315,19 +357,22 @@ export class PinkyLandLevel extends Level {
     this.grandpa = this.addNPC(new NPC(mk({ scale: 4.2, color: '#ffc9dc', variant: 3, name: 'Big Pinky', ink: '#5a3a8a' }), W, { x: gpX, z: gpZ, yaw: 0.6, name: 'Big Pinky', journalKey: 'grandpuff', talkRadius: 4.5 }));
     this.grandpa.lookAtPlayer = true;
     const gpTop = this.terrain.getHeight(gpX, gpZ) + PINKY_LOOK.height * 4.2;
-    W.bouncers.push({ x: gpX, z: gpZ, r: 1.8, top: gpTop, power: 21, onBounce: () => { this.grandpa.model.land(1); this.journalCheck('grandpuff', 'Big Pinky'); } });
-    W.addColliders([{ type: 'cyl', x: gpX, z: gpZ, r: 1.6, top: gpTop, bottom: gpTop - 4, noStand: true }]);
+    this.gpBounce = { x: gpX, z: gpZ, r: 1.8, top: gpTop, power: 21, onBounce: () => { this.grandpa.model.land(1); this.journalCheck('grandpuff', 'Big Pinky'); } };
+    W.bouncers.push(this.gpBounce);
+    this.gpCollider = { type: 'cyl', x: gpX, z: gpZ, r: 1.6, top: gpTop, bottom: gpTop - 4, noStand: true };
+    W.addColliders([this.gpCollider]);
+    // he waddles around his spot a little, and sometimes lies down for a belly-up nap
+    this.gpHome = { x: gpX, z: gpZ };
+    this.gpState = { mode: 'stand', t: 3, lie: 0 };
     this.grandpaTop = new THREE.Vector3(gpX, gpTop, gpZ);
     this.landmarks.push({ x: gpX, z: gpZ, icon: '🩷', label: 'Big Pinky' });
-    // Baby Pinky — the littlest pinky, white with a pink smile, hops near Big Pinky
-    this.baby = this.addNPC(new NPC(mk({ scale: 0.32, color: '#fffafc', variant: 0, name: 'Baby Pinky', ink: '#ff5fa2', plain: true }), W, { x: gpX + 3.2, z: gpZ + 1.5, name: 'Baby Pinky', journalKey: 'babypinky' }));
-    this.baby.wander = { x: gpX + 3.4, z: gpZ + 1.2, r: 2.2 };
+    // Baby Pinky — the littlest pinky, white with a pink smile, keeps the campfire cozy
 
     this.pip = this.addNPC(new NPC(mk({ scale: 0.38, color: '#fff0a8', variant: 1, name: 'Pip', ink: '#d0602a' }), W, { x: 6, z: -14, name: 'Pip', journalKey: 'pip' }));
     this.pip.wander = { x: 6, z: -14, r: 3 };
     this.dot = this.addNPC(new NPC(mk({ scale: 0.5, color: '#bfe6ff', variant: 2, name: 'Dot', ink: '#2a5aa8' }), W, { x: POND.x - 15, z: POND.z - 1, name: 'Dot', journalKey: 'dot' }));
     this.dot.wander = { x: POND.x - 15, z: POND.z - 2, r: 2.5 };
-    this.button = this.addNPC(new NPC(mk({ scale: 0.55, color: '#ffd1b0', variant: 4, name: 'Button', ink: '#8a3a2a' }), W, { x: CAMP.x + 2.4, z: CAMP.z + 1.8, yaw: -2.4, name: 'Button', journalKey: 'button' }));
+    this.baby = this.addNPC(new NPC(mk({ scale: 0.5, color: '#fffafc', variant: 0, name: 'Baby Pinky', ink: '#ff5fa2', plain: true }), W, { x: CAMP.x + 2.4, z: CAMP.z + 1.8, yaw: -2.4, name: 'Baby Pinky', journalKey: 'babypinky' }));
     this.marsh = this.addNPC(new NPC(mk({ scale: 0.7, color: '#e3d4ff', variant: 5, name: 'Marshmallow', ink: '#4a3a8a' }), W, { x: -44, z: 32, name: 'Marshmallow', journalKey: 'marshmallow' }));
     // a few more tiny pinkies just hopping around for joy
     const extra = [['#ffd6f0', 6, 2, -36], ['#d6ffe9', 7, 30, -12], ['#fff3d6', 8, -48, -4], ['#ffe0e0', 9, 40, 30]];
@@ -342,12 +387,13 @@ export class PinkyLandLevel extends Level {
       line(NPCW('Big Pinky', '#c76b98'), 'Ho ho ho! Well hello, little ones! Welcome to Pinky Land! I’m Big Pinky.'),
       line(NPCW('Big Pinky', '#c76b98'), 'I’m the biggest, fluffiest pinky around. Go on — jump on my tummy. Everybody does!'),
       line(NPCW('Big Pinky', '#c76b98'), 'If you bounce high enough, you might find a Dream Star floating right above me. Ho ho!'),
-      line(NPCW('Big Pinky', '#c76b98'), 'Have you met Baby Pinky? The little white one hopping by my feet. Say hi — Baby Pinky LOVES new friends.'),
+      line(NPCW('Big Pinky', '#c76b98'), 'Have you met Baby Pinky? The little white one by the campfire at the Cozy Camp. Say hi — Baby Pinky LOVES new friends.'),
     ]);
     talk(this.baby, () => [
       line(NPCW('Baby Pinky', '#ff5fa2'), 'Hi! Hi! Hi! I’m Baby Pinky!'),
-      line(NPCW('Baby Pinky', '#ff5fa2'), 'I’m the littlest pinky. Big Pinky lets me bounce on him when I’m sleepy.'),
-      line(NPCW('Baby Pinky', '#ff5fa2'), 'Did you see the dragons? They’re SO big. And SO nice. The red one tells the best stories!'),
+      line(NPCW('Baby Pinky', '#ff5fa2'), 'I’m the littlest pinky. Welcome to the Cozy Camp! I keep the fire warm and crackly.'),
+      line(NPCW('Baby Pinky', '#ff5fa2'), 'When it gets dark, come sit by the fire. You can set up a tent and sleep under the stars.'),
+      line(NPCW('Baby Pinky', '#ff5fa2'), 'Did you know every star in the sky is a happy dream someone had? That’s why they twinkle. Look for shooting stars!'),
     ]);
     talk(this.pip, () => (this.P.cape ? [
       line(NPCW('Pip', '#d0902a'), 'You found the Sky Cape! Hold jump in the air to glide. Wheee!'),
@@ -361,11 +407,6 @@ export class PinkyLandLevel extends Level {
       line(NPCW('Dot', '#2a5aa8'), 'Splish splash! I’m Dot. Sparkle Pond is the clearest water in the whole world.'),
       line(NPCW('Dot', '#2a5aa8'), 'Hold Shift to dive under the water. There are glowing pieces of sea glass at the bottom!'),
       line(NPCW('Dot', '#2a5aa8'), 'And if you swim behind the waterfall… shhh. You’ll see.'),
-    ]);
-    talk(this.button, () => [
-      line(NPCW('Button', '#8a3a2a'), 'Welcome to the Cozy Camp! I keep the fire warm and crackly.'),
-      line(NPCW('Button', '#8a3a2a'), 'When it gets dark, come sit by the fire. You can set up a tent and sleep under the stars.'),
-      line(NPCW('Button', '#8a3a2a'), 'Did you know every star in the sky is a happy dream someone had? That’s why they twinkle.'),
     ]);
     talk(this.marsh, () => (this.dayNight.isNight() ? [
       line(NPCW('Marshmallow', '#4a3a8a'), '*yawn*… Oh! It’s night time. My favorite.'),
@@ -438,10 +479,23 @@ export class PinkyLandLevel extends Level {
     this.landmarks.push({ x: EMBER_HOME.x, z: EMBER_HOME.z, icon: '🐉', label: 'Ember’s Nest' }, { x: LANTERN_HILL.x, z: LANTERN_HILL.z, icon: '🏮', label: 'Lantern Hill' }, { x: SUN_STEPS.x, z: SUN_STEPS.z, icon: '☀️', label: 'Sun Steps' }, { x: cove.x, z: cove.z, icon: '🌊', label: 'Serpent Cove' });
     this.mapFeatures.push({ type: 'rock', x: SUN_STEPS.x, z: SUN_STEPS.z, r: 3 });
 
+    // talking to a dragon ends with an offer of a ride on their back
+    const rideOffer = {
+      'dragon-ember': ['Sir Ember', '#d0402a', 0.7, 'Fancy a flight, little explorer? Climb up on my back — hold on to my spikes!'],
+      'dragon-long': ['Lóng Mei', '#c0202a', 1.1, 'Would you like to fly with me? Sit just behind my head — the magic will hold you.'],
+      'dragon-quetzi': ['Quetzi', '#1f8a50', 1.2, '¿Quieres volar? Want to fly? My feathers are very soft to sit on!'],
+      'dragon-fjola': ['Fjola', '#1d6f8f', 1.0, 'Want to go for a swim on my back? I promise not to dive… much! *splash*'],
+    };
     const talkTo = (d, radius, linesFn) => this.addInteractable({
       pos: () => d.talkPos(), radius, enabled: () => d.canTalk,
-      label: `Talk to ${d.name}`,
-      action: async () => { this.journalCheck(d.info.key, d.name); if (d.puffSparkles) d.puffSparkles(); await g.ui.dialogue(linesFn()); this.meet(d.info.key); },
+      label: () => (met(d.info.key) ? `Talk to ${d.name} · ride 🐉` : `Talk to ${d.name}`),
+      action: async () => {
+        this.journalCheck(d.info.key, d.name); if (d.puffSparkles) d.puffSparkles();
+        const o = rideOffer[d.info.key];
+        const v = await g.ui.dialogue([...linesFn(), line(NPCW(o[0], o[1], o[2]), o[3], { choices: [{ text: '🐉 Yes! Let’s go!', value: 'ride' }, { text: 'Maybe later', value: 'no' }] })]);
+        this.meet(d.info.key);
+        if (v === 'ride') this.startRide(d);
+      },
     });
     const met = (k) => this.P.met.includes(k);
     talkTo(ember, 5, () => (met('dragon-ember') ? [
@@ -450,7 +504,7 @@ export class PinkyLandLevel extends Level {
     ] : [
       line(NPCW('Sir Ember', '#d0402a', 0.7), 'Oh! Hello there, little ones! I’m Sir Ember. Don’t worry — I only breathe sparkles!'),
       line(NPCW('Sir Ember', '#d0402a', 0.7), 'In the old castle stories, knights and dragons were always fighting. How silly! I’d much rather have a picnic.'),
-      line(NPCW('Sir Ember', '#d0402a', 0.7), 'My favourite job is warming marshmallows for Button at the Cozy Camp. One tiny puff — perfectly golden!'),
+      line(NPCW('Sir Ember', '#d0402a', 0.7), 'My favourite job is warming marshmallows for Baby Pinky at the Cozy Camp. One tiny puff — perfectly golden!'),
       line(PINKY, 'Sir Ember gives the warmest hugs. Like a big, cosy blanket!'),
     ]));
     talkTo(long, 6, () => [
@@ -489,7 +543,130 @@ export class PinkyLandLevel extends Level {
   }
 
   meet(key) {
-    if (!this.P.met.includes(key)) { this.P.met.push(key); this.game.saveGame(); }
+    if (this.P.met.includes(key)) return;
+    this.P.met.push(key); this.game.saveGame();
+    if (DRAGON_KINDS.some((k) => k.key === key)) this.dragonFound(key);
+  }
+
+  // ---- Jacinta's Dragon Quest: find every kind of dragon (some live on Snowdrop Island)
+  dragonCount() { return DRAGON_KINDS.filter((k) => this.P.met.includes(k.key) || (this.game.state.snow?.met || []).includes(k.key)).length; }
+  dragonFound(key) {
+    const g = this.game, n = this.dragonCount(), kind = DRAGON_KINDS.find((k) => k.key === key);
+    if (!g.state.journal.includes('dragonquest')) g.state.journal.push('dragonquest');
+    g.ui.toast('🐉', `Dragon Quest: <b>${kind.kind}</b> found! (${n} / ${DRAGON_KINDS.length})`);
+    if (n === DRAGON_KINDS.length && !this.P.dragonMaster) {
+      this.P.dragonMaster = true; g.saveGame();
+      setTimeout(() => g.ui.dialogue([
+        line(J, 'Pinky! I found them ALL! Every kind of dragon!'),
+        line(PINKY, 'You’re a real Dragon Explorer! The dragons made you something… a shiny Dragon Scale badge! ✨'),
+      ]), 2500);
+      this.journalCheck('dragonbadge', 'Dragon Explorer Badge');
+    } else if (n < DRAGON_KINDS.length && n === 1) {
+      setTimeout(() => g.ui.say(`Jacinta wants to find every kind of dragon! ${DRAGON_KINDS.length - n} more to go. 🐉`, 5), 2500);
+    }
+  }
+
+  // ---- riding a dragon
+  startRide(d) {
+    const g = this.game, P = this.player;
+    const kind = d instanceof WesternDragon ? 'wings' : d instanceof NordicSerpent ? 'swim' : 'serpent';
+    d.startRide();
+    const yaw = kind === 'wings' ? d.yaw : d.rideYaw();
+    this.riding = { d, kind, yaw, speed: 0, vy: kind === 'wings' ? 5 : 0, bank: 0, t: 0, lift: kind === 'wings' ? 1.6 : 0 };
+    this._rideDist = this.rig.targetDistance;
+    this.rig.targetDistance = kind === 'wings' ? 11 : 9;
+    P.model.anim.sit = true;
+    for (const f of this.followers) f.root.visible = false; // friends wait at home while you fly
+    g.audio.portal?.();
+    g.ui.toast('🐉', kind === 'swim'
+      ? '<b>Riding Fjola!</b> W faster · S slower · A D turn · E hop off'
+      : `<b>Riding ${d.name}!</b> W faster · S slower · A D turn · Space up · Shift down · E hop off`);
+    if (this.P.rides === undefined) this.P.rides = 0;
+    this.P.rides++;
+  }
+
+  endRide() {
+    const r = this.riding; if (!r) return;
+    const P = this.player, W = this.world;
+    this.riding = null;
+    r.d.endRide();
+    P.model.anim.sit = false;
+    for (const f of this.followers) { f.root.visible = true; }
+    this.rig.targetDistance = this._rideDist || 7;
+    // hop off to the side (and fall or glide down if you were up high)
+    const side = new THREE.Vector3(Math.cos(r.yaw), 0, -Math.sin(r.yaw));
+    const at = r.d.seat(new THREE.Vector3()).addScaledVector(side, r.kind === 'wings' ? 2.2 : 1.6);
+    P.pos.copy(at);
+    P.pos.y = Math.max(at.y, W.groundHeight(at.x, at.z, at.y + 2) + 0.05);
+    P.vel.set(0, 2, 0);
+    for (const f of this.followers) f.place?.(P.pos.x + 1, P.pos.z + 1);
+  }
+
+  rideSeat() {
+    const r = this.riding, P = this.player;
+    r.d.seat(P.pos);
+    P.vel.set(0, 0, 0);
+    P.yaw = r.yaw; P.root.rotation.set(0, r.yaw, 0);
+    P.model.anim.speed = 0; P.model.anim.grounded = true; P.model.anim.sit = true;
+  }
+
+  rideUpdate(dt) {
+    const r = this.riding, inp = this.game.input, W = this.world, d = r.d;
+    dt = Math.min(dt, 1 / 20);
+    r.t += dt;
+    let turn = 0, thr = 0, up = 0;
+    if (inp.down('KeyA', 'ArrowLeft')) turn += 1;
+    if (inp.down('KeyD', 'ArrowRight')) turn -= 1;
+    if (inp.down('KeyW', 'ArrowUp')) thr += 1;
+    if (inp.down('KeyS', 'ArrowDown')) thr -= 1;
+    if (inp.down('Space')) up += 1;
+    if (inp.down('ShiftLeft', 'ShiftRight', 'KeyX')) up -= 1;
+    const pad = inp.padState;
+    if (pad) { turn -= pad.lx; thr -= pad.ly; if (pad.jump) up += 1; if (pad.dive || pad.run) up -= 1; }
+    turn = clamp(turn, -1, 1); thr = clamp(thr, -1, 1); up = clamp(up, -1, 1);
+    if (inp.hit('KeyE', 'Pad_interact', 'Enter')) { this.endRide(); return; }
+    const pos = r.kind === 'wings' ? d.pos : d.headPos;
+    const wl = W.waterLevel;
+    const floor = (x, z) => r.kind === 'wings' ? Math.max(W.terrainHeight(x, z), wl - 0.3) : Math.max(W.terrainHeight(x, z), wl) + 1.4;
+    const grounded = r.kind === 'wings' && pos.y - floor(pos.x, pos.z) < 0.25 && r.lift <= 0;
+    // speeds: cruising, fast and slow
+    const [cruise, fast, slow] = r.kind === 'wings' ? [10, 19, 2.5] : r.kind === 'serpent' ? [8, 15, 2] : [6, 11, 0];
+    let want = thr > 0 ? lerp(cruise, fast, thr) : lerp(cruise, slow, -thr);
+    if (grounded) want = Math.max(0, thr) * 3; // walking along the ground
+    r.speed = damp(r.speed, want, 1.6, dt);
+    r.yaw += turn * (grounded ? 1.8 : 1.3) * dt;
+    r.bank = damp(r.bank, -turn * 0.35 * Math.min(1, r.speed / 8), 3, dt);
+    // keep inside the sky above Pinky Land: gently turn back near the edge
+    const dist = Math.hypot(pos.x, pos.z), edge = R + 10;
+    if (dist > edge - 15) {
+      const home = Math.atan2(-pos.x, -pos.z);
+      r.yaw = angleDamp(r.yaw, home, clamp((dist - edge + 15) / 15, 0, 1) * 1.5, dt);
+      if (!this._edgeSaid || this.time - this._edgeSaid > 12) { this._edgeSaid = this.time; this.game.ui.say(`${d.name}: “Let’s stay close to Pinky Land!”`, 3); }
+    }
+    const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw);
+    let nx = pos.x + fx * r.speed * dt, nz = pos.z + fz * r.speed * dt;
+    if (r.kind === 'swim') {
+      // Fjola only swims where the water is deep
+      if (W.terrainHeight(nx, nz) > wl - 1.2) { nx = pos.x; nz = pos.z; r.speed = 0; if (!this._shallowSaid || this.time - this._shallowSaid > 8) { this._shallowSaid = this.time; this.game.ui.say('Fjola: “Too shallow for me! Let’s turn around.”', 3); } }
+      pos.x = nx; pos.z = nz;
+    } else {
+      // up and down
+      if (r.lift > 0) { r.lift -= dt; up = Math.max(up, 1); }
+      r.vy = damp(r.vy, up * 7 + (r.kind === 'wings' && !grounded && thr > 0.5 ? 0.3 : 0), 3, dt);
+      pos.x = nx; pos.z = nz;
+      pos.y = Math.min(70, pos.y + r.vy * dt);
+      const fl = floor(pos.x, pos.z);
+      if (pos.y < fl) { pos.y = fl; r.vy = Math.max(0, r.vy); }
+    }
+    if (r.kind === 'wings') {
+      d.yaw = r.yaw; d.rideBank = r.bank;
+      d.rideFly = grounded ? 0.35 : 1;
+    }
+    this.rideSeat();
+    this.player.forwardMoving = r.speed > 1;
+    // the camera swings round behind the dragon (unless you're dragging to look around)
+    if (!inp.mouse.dragging && Math.abs(inp.mouse.dx) < 1) this.rig.yaw = angleDamp(this.rig.yaw, r.yaw + Math.PI, 2.2, dt);
+    this.game.ui.prompt('E: hop off');
   }
 
   buildCollectibles() {
@@ -498,7 +675,7 @@ export class PinkyLandLevel extends Level {
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
     const stars = [
       V(POND.x - 4, T(POND.x - 4, POND.z + 26) + 0.2, POND.z + 26), // top of the cliff
-      V(POND.x + 1, 0.4, POND.z + 13.2), // behind the waterfall
+      V(POND.x + 0.6, 0.45, FALLS.face - 1.6), // behind the waterfall
       V(POND.x + 2, T(POND.x + 2, POND.z - 1) + 0.1, POND.z - 1), // bottom of the pond
       this.skyCloud.clone().add(V(0, 0.4, 0)), // on the sky cloud
       this.grandpaTop.clone().add(V(0, 6.5, 0)), // above Big Pinky
@@ -673,7 +850,7 @@ export class PinkyLandLevel extends Level {
     if (!met('grandpuff')) return { text: 'Have you met Big Pinky? He’s the BIGGEST pinky. You can bounce on him!', target: this.grandpa.root.position.clone() };
     if (!met('dot')) return { text: 'Dot lives by Sparkle Pond and knows all about swimming.', target: this.dot.root.position.clone() };
     if (!met('bellybutton') && g.state.avatar !== 'bellybutton') return { text: 'Belly Button the plush bear is in the meadow near the Dream Door. Go say hi — he gives the best hugs!', target: this.bellyButton.root.position.clone() };
-    if (!met('babypinky')) return { text: 'Baby Pinky — the littlest pinky — is hopping near Big Pinky.', target: this.baby.root.position.clone() };
+    if (!met('babypinky')) return { text: 'Baby Pinky — the littlest pinky — is sitting by the campfire at the Cozy Camp.', target: this.baby.root.position.clone() };
     if (!met('dragon-ember')) return { text: 'A friendly dragon named Sir Ember naps in a cosy nest to the north-east. Go visit!', target: this.dragons[0].pos.clone() };
     {
       const d = this.dragons.slice(1).find((x) => !met(x.info.key) && x.canTalk);
@@ -703,7 +880,7 @@ export class PinkyLandLevel extends Level {
 
   mapMarkers() {
     const m = [...this.landmarks];
-    for (const n of [this.pip, this.dot, this.button, this.marsh]) if (this.P.met.includes(n.journalKey)) m.push({ x: n.root.position.x, z: n.root.position.z, icon: '🩷', label: n.name });
+    for (const n of [this.pip, this.dot, this.baby, this.marsh]) if (this.P.met.includes(n.journalKey)) m.push({ x: n.root.position.x, z: n.root.position.z, icon: '🩷', label: n.name });
     return m;
   }
 
@@ -724,13 +901,49 @@ export class PinkyLandLevel extends Level {
     return Math.max(pond, sea);
   }
 
+  // Big Pinky: stands, waddles a few steps, or lies down belly-up so you can bounce on his tummy
+  updateBigPinky(dt) {
+    const gp = this.grandpa, S = this.gpState, H = this.gpHome;
+    if (!gp) return;
+    S.t -= dt;
+    const near = this.player.pos.distanceTo(gp.root.position) < 6;
+    if (S.mode === 'stand' && S.t < 0) {
+      if (Math.random() < 0.5) {
+        S.mode = 'walk'; S.t = 5 + Math.random() * 3;
+        const a = Math.random() * Math.PI * 2, r = 0.8 + Math.random() * 2.2;
+        gp.walkTo(H.x + Math.cos(a) * r, H.z + Math.sin(a) * r, 0.7).then(() => { if (S.mode === 'walk') S.t = Math.min(S.t, 0.5); });
+      } else { S.mode = 'lie'; S.t = 9 + Math.random() * 6; }
+    } else if (S.mode === 'walk' && S.t < 0) { gp.target = null; S.mode = 'stand'; S.t = 3 + Math.random() * 3; }
+    else if (S.mode === 'lie' && S.t < 0 && !(near && this.player.pos.y > gp.root.position.y + 0.8)) { S.mode = 'stand'; S.t = 4 + Math.random() * 3; }
+    gp.lookAtPlayer = S.mode !== 'lie';
+    S.lie += ((S.mode === 'lie' ? 1 : 0) - S.lie) * Math.min(1, dt * 1.6);
+    gp.model.anim.lie = S.lie;
+    // keep his bouncy tummy, his solid body and the Dream Star spot with him
+    const p = gp.root.position, scale = 4.2;
+    const ground = this.terrain.getHeight(p.x, p.z);
+    const back = PINKY_LOOK.height * 0.5 * scale * S.lie; // lying down, his middle is behind his feet
+    const cx = p.x - Math.sin(gp.yaw) * back, cz = p.z - Math.cos(gp.yaw) * back;
+    const topStand = ground + PINKY_LOOK.height * scale, topLie = ground + PINKY_LOOK.thickness * scale * 0.95;
+    this.gpBounce.x = cx; this.gpBounce.z = cz;
+    this.gpBounce.top = topStand + (topLie - topStand) * S.lie;
+    this.gpBounce.r = 1.8 + 0.6 * S.lie;
+    this.gpCollider.x = cx; this.gpCollider.z = cz;
+    this.gpCollider.top = this.gpBounce.top; this.gpCollider.bottom = this.gpBounce.top - 4;
+    this.gpCollider.r = 1.6 + 0.5 * S.lie;
+    if (gp.body) { gp.body.h = (this.gpBounce.top - ground); gp.body.r = 1.5 + 0.4 * S.lie; }
+    if (S.lie > 0.9 && !this._gpLieTip && near) { this._gpLieTip = true; this.game.ui.say('Big Pinky is napping belly-up. Bounce on his tummy! 🩷', 3); }
+  }
+
   update(dt) {
     if (this.bellyButton) this.bellyButton.root.visible = this.game.state.avatar !== 'bellybutton';
+    this.updateBigPinky(dt);
+    this.biolum?.update(this.player.pos);
     this.baseUpdate(dt);
     const p = this.player.pos;
     this.game.state.lastPos = { x: p.x, z: p.z };
     const n = this.game.state.counts.star || 0;
-    const counter = `⭐ ${n} / ${this.game.state.totals.star || 10}`;
+    const dk = this.dragonCount();
+    const counter = `⭐ ${n} / ${this.game.state.totals.star || 10}` + (dk ? ` · 🐉 ${dk} / ${DRAGON_KINDS.length}` : '');
     if (counter !== this._counter) { this._counter = counter; this.game.ui.setCounter(counter); }
     if (this.player.gliding && !this._glideSnd) { this._glideSnd = true; this.game.audio.glide(); }
     if (!this.player.gliding) this._glideSnd = false;

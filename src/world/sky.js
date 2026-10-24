@@ -18,7 +18,12 @@ const skyFrag = /* glsl */ `
   uniform float uStars; uniform float uTime; uniform float uSunGlow;
   varying vec3 vDir;
 
+  uniform float uMilky; uniform float uAurora; uniform float uMeteor;
   float hash(vec3 p){ p = fract(p*0.3183099+0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+  float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
+  float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ v += a * vnoise(p); p *= 2.03; a *= 0.5; } return v; }
 
   void main(){
     vec3 d = normalize(vDir);
@@ -40,20 +45,81 @@ const skyFrag = /* glsl */ `
 
     // stars
     if (uStars > 0.01 && h > -0.05) {
-      vec3 p = d * 220.0;
-      vec3 cell = floor(p);
-      float r = hash(cell);
-      if (r > 0.985) {
-        vec3 center = cell + 0.5 + (vec3(hash(cell+1.3), hash(cell+2.7), hash(cell+5.1)) - 0.5) * 0.6;
-        float dist = length(p - center);
-        float twinkle = 0.6 + 0.4 * sin(uTime * (1.5 + r * 6.0) + r * 40.0);
-        float star = smoothstep(0.35, 0.0, dist) * twinkle;
-        vec3 sc = mix(vec3(1.0,0.85,0.9), vec3(0.8,0.9,1.0), hash(cell+9.0));
-        col += sc * star * uStars * smoothstep(-0.05, 0.25, h) * 1.6;
+      float hor = smoothstep(-0.05, 0.25, h);
+      // the Milky Way: a glowing band across the sky with clumps of star clouds and dark dust lanes
+      vec3 galN = normalize(vec3(0.42, 0.35, -0.84));
+      float gd = dot(d, galN);                       // distance from the band's centre line
+      vec3 gx = normalize(cross(galN, vec3(0.0, 1.0, 0.0)));
+      vec3 gy = cross(galN, gx);
+      vec2 gp = vec2(atan(dot(d, gy), dot(d, gx)) * 3.0, gd * 9.0);  // coordinates along / across the band
+      float core = exp(-pow(gd * 5.5, 2.0));
+      float wide = exp(-pow(gd * 2.6, 2.0));
+      float clouds = fbm(gp * 1.3 + 3.0);
+      float dust = smoothstep(0.45, 0.75, fbm(gp * 2.6 - 7.0)) * exp(-pow(gd * 12.0, 2.0));
+      float bulge = 0.6 + 0.8 * pow(max(0.0, cos(atan(dot(d, gy), dot(d, gx)) - 0.6)), 6.0);  // brighter toward the galaxy's centre
+      float mw = (core * (0.55 + 0.9 * clouds) + wide * 0.25 * clouds) * bulge * (1.0 - dust * 0.85);
+      vec3 mwCol = mix(vec3(0.45, 0.5, 0.85), vec3(1.0, 0.86, 0.72), core * bulge * 0.6);
+      col += mwCol * mw * 0.32 * uMilky * uStars * hor;
+
+      // twinkling stars: many more of them inside the Milky Way
+      float dens = 0.985 - 0.02 * (core * clouds + wide * 0.5) * uMilky;
+      for (int layer = 0; layer < 2; layer++) {
+        float scale = layer == 0 ? 220.0 : 520.0;
+        vec3 p = d * scale;
+        vec3 cell = floor(p);
+        float r = hash(cell + float(layer) * 17.0);
+        float th = layer == 0 ? dens : (0.94 - 0.08 * core * uMilky);
+        if (r > th) {
+          vec3 center = cell + 0.5 + (vec3(hash(cell+1.3), hash(cell+2.7), hash(cell+5.1)) - 0.5) * 0.6;
+          float dist = length(p - center);
+          float twinkle = 0.6 + 0.4 * sin(uTime * (1.5 + r * 6.0) + r * 40.0);
+          float star = smoothstep(layer == 0 ? 0.35 : 0.3, 0.0, dist) * twinkle;
+          vec3 sc = mix(vec3(1.0,0.85,0.8), vec3(0.75,0.88,1.0), hash(cell+9.0));
+          col += sc * star * uStars * hor * (layer == 0 ? 1.6 : 0.55);
+        }
       }
-      // soft milky band
-      float band = exp(-pow(dot(d, normalize(vec3(0.3, 0.5, 0.8))) * 3.0, 2.0));
-      col += vec3(0.25, 0.2, 0.4) * band * 0.18 * uStars * smoothstep(0.0, 0.4, h);
+
+      // shooting stars: every few seconds a bright streak zips across part of the sky
+      for (int i = 0; i < 3; i++) {
+        float fi = float(i);
+        float period = 5.0 + fi * 2.3;
+        float tt = uTime + fi * 3.7;
+        float id = floor(tt / period);
+        float ph = fract(tt / period) * period;      // seconds since this one started
+        float dur = 0.9;
+        if (ph < dur) {
+          float a1 = hash(vec3(id, fi, 1.0)) * 6.2831;
+          float el = 0.35 + hash(vec3(id, fi, 2.0)) * 0.5;
+          vec3 S = normalize(vec3(cos(a1) * (1.0 - el), el, sin(a1) * (1.0 - el)));
+          vec3 T = normalize(cross(S, vec3(hash(vec3(id, fi, 3.0)) - 0.5, -1.0, hash(vec3(id, fi, 4.0)) - 0.5)));
+          float prog = ph / dur;
+          float headS = prog * 0.7;
+          vec3 rel = d - S;
+          float along = dot(rel, T);
+          float across = length(rel - T * along - S * dot(rel, S));
+          float inTail = smoothstep(headS - 0.32, headS, along) * step(along, headS);
+          float m = inTail * smoothstep(0.007, 0.0, across) * sin(prog * 3.1416);
+          float head = smoothstep(0.012, 0.0, length(d - normalize(S + T * headS))) * sin(prog * 3.1416);
+          col += vec3(1.0, 0.95, 0.85) * (m * 2.4 + head * 2.6) * uMeteor * uStars * hor;
+        }
+      }
+
+      // northern lights: green curtains with pink tops, rippling over the northern sky
+      if (uAurora > 0.01 && h > 0.0) {
+        float az = atan(d.x, -d.z);                   // 0 = north
+        float north = smoothstep(1.9, 0.2, abs(az));
+        float wave = sin(az * 3.0 + uTime * 0.25) * 0.08 + sin(az * 7.0 - uTime * 0.4) * 0.04;
+        float base = 0.10 + wave;
+        float top = base + 0.28 + 0.1 * sin(az * 2.0 + uTime * 0.15);
+        float band = smoothstep(base - 0.02, base + 0.04, h) * (1.0 - smoothstep(base + 0.06, top, h));
+        float warp = fbm(vec2(az * 3.0 + uTime * 0.05, 1.7)) * 2.0;
+        float rays = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(az * 38.0 + warp * 9.0), 2.0) * (0.4 + 0.6 * fbm(vec2(az * 22.0, uTime * 0.2)));
+        float patches = smoothstep(0.3, 0.75, fbm(vec2(az * 1.6 - uTime * 0.04, 4.2)));
+        float flick = (0.55 + 0.45 * fbm(vec2(az * 4.0 + uTime * 0.2, h * 3.0))) * (0.25 + patches);
+        float k = band * rays * flick * north;
+        vec3 ac = mix(vec3(0.15, 1.0, 0.55), vec3(0.95, 0.35, 0.85), smoothstep(base + 0.05, top, h));
+        col += ac * k * 0.55 * uAurora * uStars;
+      }
     }
     gl_FragColor = vec4(col, 1.0);
   }
@@ -61,6 +127,8 @@ const skyFrag = /* glsl */ `
 
 // Color keyframes: night, dawn, day, dusk
 const C = (h) => new THREE.Color(h);
+// a very dark blue-black night (used in Pinky Land, where the stars put on a show)
+const DEEP_NIGHT = { top: C('#02040c'), horizon: C('#0a1129'), bottom: C('#040710'), sun: C('#8f9cff'), fog: C('#060b1c'), amb: C('#3c4a92'), ground: C('#141a33') };
 const PALETTE = {
   night: { top: C('#0b1240'), horizon: C('#2b2d6e'), bottom: C('#14183f'), sun: C('#8f9cff'), fog: C('#1d2156'), amb: C('#4a55a8'), ground: C('#1a1f3a') },
   dawn: { top: C('#6f8fd8'), horizon: C('#ffb08a'), bottom: C('#f7c7c0'), sun: C('#ffb27a'), fog: C('#f2b9a6'), amb: C('#c49ad0'), ground: C('#8a6f7a') },
@@ -91,6 +159,7 @@ export class DayNight {
       uStars: { value: 0 },
       uTime: { value: 0 },
       uSunGlow: { value: 1 },
+      uMilky: { value: 0 }, uAurora: { value: 0 }, uMeteor: { value: 0 },
     };
     const geo = new THREE.SphereGeometry(1000, 48, 24);
     const mat = new THREE.ShaderMaterial({
@@ -132,6 +201,14 @@ export class DayNight {
   }
 
   get hours() { return (this.time * 24) % 24; }
+  // Pinky Land's starry show: Milky Way, shooting stars, northern lights and a deep blue-black sky
+  setStarShow(on = true) {
+    this.uniforms.uMilky.value = on ? 1 : 0;
+    this.uniforms.uAurora.value = on ? 1 : 0;
+    this.uniforms.uMeteor.value = on ? 1 : 0;
+    this.nightPal = on ? DEEP_NIGHT : null;
+  }
+
   isNight() { return this.nightAmount > 0.55; }
   isChilly() { return this.nightAmount > 0.35; }
 
@@ -155,7 +232,7 @@ export class DayNight {
     // pick palette by elevation and morning/evening
     const morning = this.time < 0.5;
     const edge = morning ? PALETTE.dawn : PALETTE.dusk;
-    mixPal(PALETTE.night, edge, smoothstep(-0.22, 0.08, elev), this.current);
+    mixPal(this.nightPal || PALETTE.night, edge, smoothstep(-0.22, 0.08, elev), this.current);
     if (!this._tmp) this._tmp = this._clonePal();
     for (const k of Object.keys(this.current)) this._tmp[k].copy(this.current[k]);
     mixPal(this._tmp, PALETTE.day, smoothstep(0.18, 0.55, elev), this.current);

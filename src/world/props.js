@@ -452,7 +452,7 @@ export class Portal {
 
 // ---------------- Waterfall ----------------
 export class Waterfall {
-  constructor(scene, { top, bottom, width = 3, z = 0, yaw = 0, x = 0 }) {
+  constructor(scene, { top, bottom, width = 3, z = 0, yaw = 0, x = 0, bulge = 1.2, lipBack = 0 }) {
     this.group = new THREE.Group();
     this.group.position.set(x, 0, z);
     this.group.rotation.y = yaw;
@@ -463,7 +463,10 @@ export class Waterfall {
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i);
       const t = (h / 2 - y) / h; // 0 top .. 1 bottom
-      p.setZ(i, Math.pow(t, 2.2) * 1.2 + Math.sin(p.getX(i) * 3) * 0.05);
+      // pours over the lip (the top tucks back into the stream), then falls with a gentle outward curve
+      const lip = lipBack * Math.max(0, 1 - t / 0.06);
+      p.setZ(i, Math.pow(t, 2.2) * bulge + Math.sin(p.getX(i) * 3) * 0.05 - lip);
+      if (t < 0.06) p.setY(i, y + (1 - t / 0.06) * 0.12);
     }
     geo.translate(0, bottom + h / 2, 0);
     this.mat = new THREE.ShaderMaterial({

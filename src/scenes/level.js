@@ -286,7 +286,7 @@ export class Level {
     this.pookFx?.update(dt);
     const p = this.player;
     const busy = g.ui.isBusy() || this.cutscene;
-    p.frozen = busy;
+    p.frozen = busy || !!this.riding; // riding a dragon: the dragon does the moving
     g.input.enabled = !g.ui.open;
 
     p.update(dt);
@@ -334,7 +334,7 @@ export class Level {
 
     // talk / interact prompt
     let best = null, bestD = Infinity;
-    if (!busy) {
+    if (!busy && !this.riding) {
       for (const it of this.interactables) {
         if (it.enabled && !it.enabled()) continue;
         const pos = typeof it.pos === 'function' ? it.pos() : it.pos;
@@ -344,6 +344,10 @@ export class Level {
     }
     g.ui.prompt(best ? (typeof best.label === 'function' ? best.label() : best.label) : null);
     if (best && g.input.hit('KeyE', 'Pad_interact', 'Enter')) best.action();
+
+    // riding a dragon (Pinky Land): steer the dragon and keep the rider on its back
+    if (this.riding && !busy) this.rideUpdate(dt);
+    else if (this.riding) this.rideSeat();
 
     // camera
     const target = p.pos.clone();
