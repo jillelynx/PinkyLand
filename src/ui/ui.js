@@ -115,7 +115,7 @@ export class UI {
 
   setMode(mode) {
     this.heartsPill.classList.toggle('hidden', mode !== 'earth' && mode !== 'home');
-    this.counterPill.classList.toggle('hidden', mode !== 'pinky');
+    this.counterPill.classList.toggle('hidden', mode !== 'pinky' && mode !== 'snow');
   }
 
   setHearts(n, pop = -1) {
@@ -415,7 +415,9 @@ export class UI {
         <button class="big-btn alt" data-morning style="min-width:0;font-size:16px">☀️ Skip to morning</button>
         <button class="big-btn alt" data-menu style="min-width:0;font-size:16px">🏠 Main menu (progress is saved)</button>
         <button class="big-btn alt" data-restart style="min-width:0;font-size:16px">Start a new game</button>
+        <button class="big-btn alt" data-grownup style="min-width:0;font-size:16px">🔑 Grown-ups</button>
       </div>`, 'settings');
+    this.panel.querySelector('[data-grownup]').addEventListener('click', () => this.game.openGrownUp(null));
     this.panel.querySelector('[data-q]').value = s.quality;
     this.panel.querySelectorAll('[data-vol]').forEach((r) => r.addEventListener('input', () => this.game.setVolume(r.dataset.vol, parseFloat(r.value))));
     this.panel.querySelector('[data-q]').addEventListener('change', (e) => this.game.setQuality(e.target.value));

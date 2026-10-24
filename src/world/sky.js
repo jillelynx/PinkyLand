@@ -129,6 +129,8 @@ const skyFrag = /* glsl */ `
 const C = (h) => new THREE.Color(h);
 // a very dark blue-black night (used in Pinky Land, where the stars put on a show)
 const DEEP_NIGHT = { top: C('#02040c'), horizon: C('#0a1129'), bottom: C('#040710'), sun: C('#8f9cff'), fog: C('#060b1c'), amb: C('#3c4a92'), ground: C('#141a33') };
+// a crisp, clear winter day for Snowdrop Island (bluer shadows so the snow has shape)
+export const SNOW_DAY = { top: C('#3b86e6'), horizon: C('#b9dcff'), bottom: C('#e3f0ff'), sun: C('#fff3e2'), fog: C('#d3e7fb'), amb: C('#93b2e6'), ground: C('#b9c9e6') };
 const PALETTE = {
   night: { top: C('#0b1240'), horizon: C('#2b2d6e'), bottom: C('#14183f'), sun: C('#8f9cff'), fog: C('#1d2156'), amb: C('#4a55a8'), ground: C('#1a1f3a') },
   dawn: { top: C('#6f8fd8'), horizon: C('#ffb08a'), bottom: C('#f7c7c0'), sun: C('#ffb27a'), fog: C('#f2b9a6'), amb: C('#c49ad0'), ground: C('#8a6f7a') },
@@ -235,7 +237,7 @@ export class DayNight {
     mixPal(this.nightPal || PALETTE.night, edge, smoothstep(-0.22, 0.08, elev), this.current);
     if (!this._tmp) this._tmp = this._clonePal();
     for (const k of Object.keys(this.current)) this._tmp[k].copy(this.current[k]);
-    mixPal(this._tmp, PALETTE.day, smoothstep(0.18, 0.55, elev), this.current);
+    mixPal(this._tmp, this.dayPal || PALETTE.day, smoothstep(0.18, 0.55, elev), this.current);
 
     const c = this.current;
     this.uniforms.uTop.value.copy(c.top);

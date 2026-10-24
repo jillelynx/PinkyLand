@@ -118,6 +118,18 @@ export const PET_LOOKS = {
     color: '#17161b', paws: '#17161b', nose: '#3a2a30', innerEar: '#6a4a55', eyeColor: '#9fd36a',
     fur: { length: 0.04, layers: 16, density: 110, droop: 0.9 }, speed: 0.55, whiskers: true,
   },
+  clementine: { // orange tabby mama cat with a white tummy
+    name: 'Clementine', kind: 'cat', len: 0.37, r: 0.088, legLen: 0.13, legR: 0.025, headR: 0.076, snout: 0.03,
+    ears: 'cat', earSize: 0.05, tail: { len: 0.32, r: 0.022, segs: 6, up: 0.9 },
+    color: '#e0893a', belly: '#fbf1e2', bellyMode: 2, paws: '#fbf1e2', nose: '#e89a9a', innerEar: '#f0b0a8', eyeColor: '#8fd06a',
+    fur: { length: 0.012, layers: 10, density: 220 }, speed: 0.8, whiskers: true,
+  },
+  peaches: { // her tiny lost kitten: fluffy, orange and white, with a big head and big ears
+    name: 'Peaches', kind: 'cat', len: 0.17, r: 0.048, legLen: 0.06, legR: 0.016, headR: 0.058, snout: 0.018,
+    ears: 'cat', earSize: 0.04, tail: { len: 0.14, r: 0.014, segs: 5, up: 1.1 },
+    color: '#f2a25a', belly: '#fffaf2', bellyMode: 2, paws: '#fffaf2', nose: '#f3a5b0', innerEar: '#f6c0c0', eyeColor: '#7fb8e8',
+    fur: { length: 0.014, layers: 10, density: 240, droop: 0.4 }, speed: 0.6, whiskers: true,
+  },
   molly: { // gray and white rat
     name: 'Molly', kind: 'rat', len: 0.17, r: 0.045, legLen: 0.025, legR: 0.012, headR: 0.035, snout: 0.035,
     ears: 'round', earSize: 0.022, tail: { len: 0.17, r: 0.007, segs: 6, up: -0.1, bare: true },

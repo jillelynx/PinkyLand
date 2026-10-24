@@ -27,6 +27,7 @@ const frag = /* glsl */ `
   uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSunColor;
   uniform vec3 uSkyTop; uniform vec3 uSkyHorizon; uniform float uNight;
   uniform vec3 uShallow; uniform vec3 uDeep;
+  uniform vec3 uMoonDir; uniform float uStars; uniform float uAurora;
   varying float vDepth; varying vec3 vWPos;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1)))*43758.5453); }
@@ -34,6 +35,23 @@ const frag = /* glsl */ `
     vec2 i = floor(p), f = fract(p);
     vec2 u = f*f*(3.0-2.0*f);
     return mix(mix(hash(i), hash(i+vec2(1,0)), u.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), u.x), u.y);
+  }
+  float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 3; i++){ v += a * vnoise(p); p *= 2.03; a *= 0.5; } return v; }
+  // the same northern lights as in the sky, seen in the mirror of the sea
+  vec3 auroraAt(vec3 d){
+    float h = d.y;
+    float az = atan(d.x, -d.z);
+    float north = smoothstep(1.9, 0.2, abs(az));
+    float wave = sin(az * 3.0 + uTime * 0.25) * 0.08 + sin(az * 7.0 - uTime * 0.4) * 0.04;
+    float base = 0.10 + wave;
+    float top = base + 0.28 + 0.1 * sin(az * 2.0 + uTime * 0.15);
+    float band = smoothstep(base - 0.02, base + 0.04, h) * (1.0 - smoothstep(base + 0.06, top, h));
+    float warp = fbm(vec2(az * 3.0 + uTime * 0.05, 1.7)) * 2.0;
+    float rays = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(az * 38.0 + warp * 9.0), 2.0);
+    float patches = smoothstep(0.3, 0.75, fbm(vec2(az * 1.6 - uTime * 0.04, 4.2)));
+    float k = band * rays * (0.4 + patches) * north;
+    vec3 ac = mix(vec3(0.15, 1.0, 0.55), vec3(0.95, 0.35, 0.85), smoothstep(base + 0.05, top, h));
+    return ac * k * 0.55;
   }
   vec3 waveNormal(vec2 p){
     float t = uTime;
@@ -66,6 +84,25 @@ const frag = /* glsl */ `
     float spec = pow(max(dot(r, viewDir), 0.0), 180.0);
     float glint = step(0.82, vnoise(vWPos.xz*6.0 + uTime*1.5)) * pow(max(dot(r, viewDir), 0.0), 25.0);
     col += uSunColor * (spec * 2.2 + glint * 1.4) * (1.0 - uNight*0.6);
+
+    // night: the moon makes a long, glittering path on the water, the northern
+    // lights are reflected as wobbly green and pink, and starlight twinkles on the waves
+    if (uStars > 0.01 && !below) {
+      vec3 rd = reflect(-viewDir, n);
+      vec3 md = normalize(uMoonDir);
+      vec3 rm = reflect(-md, n);
+      float mAlign = max(dot(rm, viewDir), 0.0);
+      float moonUp = smoothstep(-0.05, 0.08, md.y);
+      float sparkle = step(0.7, vnoise(vWPos.xz * 3.5 + vec2(uTime * 0.9, -uTime * 0.6))) * pow(mAlign, 18.0);
+      float sheen = pow(mAlign, 60.0);
+      col += vec3(0.85, 0.9, 1.0) * (sparkle * 1.6 + sheen * 0.9) * moonUp * uStars;
+      if (rd.y > 0.0 && uAurora > 0.01) {
+        float shimmer = 0.75 + 0.25 * sin(vWPos.x * 1.7 + vWPos.z * 1.3 + uTime * 2.0);
+        col += auroraAt(rd) * uAurora * uStars * 1.5 * shimmer * (0.5 + fres);
+      }
+      float tw = step(0.93, vnoise(vWPos.xz * 9.0 + uTime * 0.7)) * smoothstep(0.2, 0.9, rd.y);
+      col += vec3(0.8, 0.85, 1.0) * tw * 0.35 * uStars;
+    }
 
     // gentle shore foam
     float shore = 1.0 - smoothstep(0.0, 0.35, vDepth);
@@ -101,6 +138,9 @@ export class Water {
     this.uniforms.uSunColor = skyUniforms.uSunColor;
     this.uniforms.uSkyTop = skyUniforms.uTop;
     this.uniforms.uSkyHorizon = skyUniforms.uHorizon;
+    this.uniforms.uMoonDir = skyUniforms.uMoonDir || { value: new THREE.Vector3(0, -1, 0) };
+    this.uniforms.uStars = skyUniforms.uStars || { value: 0 };
+    this.uniforms.uAurora = skyUniforms.uAurora || { value: 0 };
 
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: vert, fragmentShader: frag,

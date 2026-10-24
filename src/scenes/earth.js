@@ -17,6 +17,8 @@ import { makeNoise2D, makeRandom, smoothstep } from '../util/noise.js';
 const ROAD_Z = -44; // the street runs BEHIND the houses, so Jacinta never has to cross it
 const WALK_Z = -20.4; // the sidewalk in front of the houses, along the park
 const MANGO_X = -25.5, MANGO_Z = 11; // the hurt parrot's stump, out in the open where it's easy to see
+const KITTEN_SPOT = { x: 24.6, z: 24.2 }; // the lost kitten hides by the bushes in the far corner of the park
+const MAMA_YARD = { x: 43.2, z: -25.2 }; // her mama lives in the front yard of the blue house
 const LITTER_SPOTS = [[-4, 8], [16, 6], [-20, 22], [8, 32], [22, 22], [-26, 4], [3, -2], [-14, 30]]; // litter in the park
 const PINKY = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
 const J = { who: 'Jacinta', color: '#ff6fa8', pitch: 1.2 };
@@ -305,6 +307,7 @@ export class EarthLevel extends Level {
 
     this.applyQuestState();
     this.buildPets();
+    this.buildKitten();
   }
 
   // Jacinta's furry neighbors — she can talk to all of them
@@ -390,6 +393,104 @@ export class EarthLevel extends Level {
       for (const pet of Object.values(this.pets)) pet.update(dt, p);
       this.songbirds.update(dt, p);
       if (!this._sawBirds && this.songbirds.birds.some((b) => b.m.position.distanceTo(p) < 8)) { this._sawBirds = true; this.journalCheck('songbird', 'Songbirds'); }
+    });
+  }
+
+  // ---- a lost kitten in the park, and her worried mama by the blue house
+  buildKitten() {
+    const g = this.game, W = this.world, E = this.E;
+    if (E.kitten === 'carried' || !E.kitten) E.kitten = E.kitten === 'home' ? 'home' : 'lost'; // a carried kitten waits in the park again after a reload
+    this.kittenState = E.kitten;
+    const mom = new Pet(PET_LOOKS.clementine, W, { ...MAMA_YARD, r: 2.0 });
+    const kit = new Pet(PET_LOOKS.peaches, W, this.kittenState === 'home' ? { x: MAMA_YARD.x + 0.5, z: MAMA_YARD.z, r: 0.7 } : { ...KITTEN_SPOT, r: 0.25 });
+    if (this.kittenState === 'lost') { kit.state = 'sit'; kit.stateT = 99; }
+    this.scene.add(mom.root, kit.root);
+    this.mamaCat = mom; this.kitten = kit;
+    kit.root.scale.setScalar(1.25); // a little easier to spot in the grass
+    W.addBody({ pos: mom.pos, r: 0.16, h: mom.hipY + 0.18 });
+    // a little ring of flowers so she's easy to spot once you get close
+    this.scene.add(createFlowers(this.terrain, { count: 60, area: 3, center: [KITTEN_SPOT.x, KITTEN_SPOT.z], where: () => 1 }));
+    const MAMA = { who: 'Clementine', color: '#d07a2c', pitch: 1.0 };
+    const KIT = { who: 'Peaches', color: '#f0a060', pitch: 2.0 };
+    this._mewT = 2;
+    this.updaters.push((dt) => {
+      const p = this.player.pos;
+      if (this.kittenState === 'carried') {
+        const m = this.player.model, hand = m.arms?.[0]?.hand;
+        if (hand) {
+          const a = new THREE.Vector3(), b = new THREE.Vector3();
+          m.arms[0].hand.getWorldPosition(a); m.arms[1].hand.getWorldPosition(b);
+          kit.root.position.copy(a).lerp(b, 0.5); kit.root.position.y -= 0.05;
+          kit.root.rotation.set(0, this.player.yaw + Math.PI / 2, 0);
+        }
+      } else {
+        if (this.kittenState === 'home') { kit.home.x = mom.pos.x + 0.45; kit.home.z = mom.pos.z + 0.2; }
+        kit.update(dt, p);
+      }
+      mom.update(dt, p);
+      // the kitten mews and her mama calls, so you can find them by listening
+      this._mewT -= dt;
+      if (this._mewT < 0 && this.kittenState !== 'home') {
+        this._mewT = 2.6 + Math.random() * 2;
+        const dk = p.distanceTo(kit.root.position), dm = p.distanceTo(mom.pos);
+        if (this.kittenState === 'lost' && dk < 28) g.audio.meow(1.55, Math.max(0.15, 1 - dk / 28));
+        if (dm < 24 && Math.random() < 0.6) setTimeout(() => g.audio.meow(0.85, Math.max(0.15, 1 - dm / 24) * 0.8), 700);
+      }
+    });
+    this.addInteractable({
+      pos: () => kit.root.position, radius: 1.8,
+      label: () => (this.kittenState === 'lost' ? 'Gently pick up the little kitten' : 'Pet Peaches'),
+      enabled: () => this.kittenState !== 'carried' && this.mangoState !== 'carried',
+      action: async () => {
+        if (this.kittenState === 'home') {
+          g.audio.purr();
+          return g.ui.dialogue([line(KIT, 'Mew! *purr purr*'), line(PINKY, 'Peaches says thank you for bringing her home. She’s going to take a nap with her mama now.')]);
+        }
+        g.audio.meow(1.55, 1);
+        await g.ui.dialogue([
+          line(KIT, 'Mew… mew…'),
+          line(J, 'Oh! A teeny tiny kitten, all by herself. She’s shivering.'),
+          line(PINKY, 'She’s too little to be out here alone. She must be lost! Her collar says “Peaches.”'),
+          line(J, 'Don’t worry, Peaches. I’ll hold you safe and we’ll find your mommy.'),
+          line(PINKY, 'Let’s listen for a grown-up cat calling for her baby. Maybe near the houses?'),
+        ]);
+        this.kittenState = 'carried'; E.kitten = 'carried';
+        this.player.model.anim.persist = true;
+        this.player.model.playAction('carry', 99999);
+        this.journalCheck('peaches', 'Peaches');
+        g.saveGame();
+      },
+    });
+    this.addInteractable({
+      pos: () => mom.pos, radius: 2.0, label: () => (this.kittenState === 'carried' ? 'Give Peaches back to her mama' : 'Talk to the orange cat'),
+      action: async () => {
+        this.journalCheck('clementine', 'Clementine');
+        if (this.kittenState === 'carried') {
+          await g.ui.dialogue([
+            line(MAMA, 'MRROW?! Mrrrow!'),
+            line(KIT, 'Mew! Mew mew!'),
+            line(J, 'Is this your baby? I found her all alone by the bushes in the far corner of the park.'),
+          ]);
+          this.player.model.anim.persist = false;
+          this.player.model.anim.action = null;
+          this.player.model.anim.actionT = 0;
+          this.kittenState = 'home'; E.kitten = 'home';
+          kit.pos.set(mom.pos.x + 0.45, this.terrain.getHeight(mom.pos.x, mom.pos.z), mom.pos.z + 0.2);
+          kit.home = { x: mom.pos.x + 0.45, z: mom.pos.z + 0.2, r: 0.7 };
+          kit.state = 'idle'; kit.stateT = 2; mom.state = 'sit'; mom.stateT = 6;
+          g.audio.purr();
+          this.giveHeart('kitten', mom.pos.clone());
+          await g.ui.dialogue([
+            line(MAMA, 'Prrrrrrr… *lick lick*'),
+            line(PINKY, 'Her mama is giving her kitty kisses! Clementine says thank you for keeping her baby safe.'),
+            line(J, 'Bye, Peaches. Stay close to your mommy, okay?'),
+          ]);
+          return;
+        }
+        g.audio.meow(0.85, 1);
+        if (this.kittenState === 'lost') return g.ui.dialogue([line(MAMA, 'Mrrrow? MRRROW?'), line(PINKY, 'She keeps calling and looking all around. Her tag says “Clementine.” I think she lost her kitten!'), line(J, 'Let’s look for a little kitten in the park. Listen for tiny mews!')]);
+        return g.ui.dialogue([line(MAMA, 'Prrrr… *slow blink*'), line(PINKY, 'Clementine is so happy her baby is home. A slow blink means “I love you”!')]);
+      },
     });
   }
 
@@ -623,7 +724,7 @@ export class EarthLevel extends Level {
 
     // Mango the parrot
     this.addInteractable({
-      pos: () => this.mango.position, enabled: () => this.mangoState === 'hurt',
+      pos: () => this.mango.position, enabled: () => this.mangoState === 'hurt' && this.kittenState !== 'carried',
       label: 'Gently pick up the hurt parrot',
       action: async () => {
         await g.ui.dialogue([
@@ -736,7 +837,7 @@ export class EarthLevel extends Level {
     g.state.counts.heart = E.hearts.length;
     g.audio.heart();
     g.ui.setHearts(E.hearts.length, E.hearts.length - 1);
-    g.ui.toast('💗', `Kindness Heart ${E.hearts.length} of 5!`);
+    g.ui.toast('💗', E.hearts.length > 5 ? 'Bonus Kindness Heart! You did ALL the kind things! 🌟' : `Kindness Heart ${E.hearts.length} of 5!`);
     this.portal.setHearts(E.hearts.length);
     this.spawnBurst(pos.clone().add(new THREE.Vector3(0, 1.4, 0)), '#ff5f8f');
     // a floating heart rises from the person you helped
@@ -747,7 +848,9 @@ export class EarthLevel extends Level {
     const upd = (dt) => { t += dt; h.position.y += dt * 1.2; animateCollectible(h, dt); h.scale.setScalar(Math.max(0.01, 1 - t / 2.5)); if (t > 2.5) { this.scene.remove(h); this.updaters.splice(this.updaters.indexOf(upd), 1); } };
     this.updaters.push(upd);
     this.journalCheck('heart', 'Kindness Hearts');
-    if (E.hearts.length >= 5) {
+    if (E.hearts.length > 5) {
+      setTimeout(() => g.ui.say('Every single kind thing in the whole park — you did them all! 🌟', 5), 1800);
+    } else if (E.hearts.length === 5) {
       setTimeout(() => {
         g.ui.say('Jacinta! Do you feel that?! All five hearts are glowing. The door at the Wishing Tree is OPEN!', 7);
         g.audio.portal();
@@ -778,6 +881,7 @@ export class EarthLevel extends Level {
     const P = (o) => o.root.position.clone();
     if (E.hearts.length >= 5) return { text: 'All five hearts are glowing! Walk through the magic door at the Wishing Tree!', target: this.portal.group.position.clone() };
     if (this.mangoState === 'carried') return { text: 'Mango lives in the purple house. Let’s carry him to Mrs. Rosa!', target: P(this.rosa) };
+    if (this.kittenState === 'carried') return { text: 'Listen for a grown-up cat calling “Mrrow?” — Peaches’s mama is in the yard of the blue house at the end of the street.', target: this.mamaCat.pos.clone() };
     if (E.bandage) return { text: 'We have the bandage! Let’s bring it to Maya.', target: P(this.maya) };
     // Kindness can be done in ANY order: point to whichever unfinished one is closest
     const options = [];
@@ -786,6 +890,7 @@ export class EarthLevel extends Level {
     else if (!has('maya')) options.push({ text: 'I think someone fell off their bike near the path. Let’s see if they’re okay.', target: P(this.maya) });
     if (!has('oliver')) options.push({ text: 'Someone is sitting all alone on a bench. Maybe they’re sad?', target: P(this.oliver) });
     if (!has('bully')) options.push({ text: 'I hear someone upset at the playground. Let’s go see.', target: P(this.sam) });
+    if (this.kittenState === 'lost') options.push({ text: 'Do you hear tiny mews? A little kitten is hiding by the bushes in the far corner of the park.', target: this.kitten.root.position.clone() });
     if (this.mangoState === 'hurt') options.push({ text: 'Listen… a little bird is chirping! He’s on a tree stump on the west side of the park.', target: this.mango.position.clone() });
     if (!has('litter')) {
       const p = this.player.pos;
@@ -809,6 +914,7 @@ export class EarthLevel extends Level {
     if (!E.hearts.includes('oliver')) m.push({ x: this.oliver.root.position.x, z: this.oliver.root.position.z, icon: '💧', label: 'Oliver' });
     if (!E.hearts.includes('bully')) m.push({ x: this.sam.root.position.x, z: this.sam.root.position.z, icon: '⚽', label: 'Sam' });
     m.push({ x: this.binPos.x, z: this.binPos.z, icon: '🗑️' });
+    if (this.kittenState !== 'home' && this.mamaCat) m.push({ x: this.mamaCat.pos.x, z: this.mamaCat.pos.z, icon: '🐈', label: 'Worried mama cat' });
     return m;
   }
 

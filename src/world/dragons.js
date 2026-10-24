@@ -230,11 +230,15 @@ class Trail {
 }
 
 // ---------------------------------------------------------------- the dragons
+// colours for the round winged dragons: Sir Ember (red) and Frost (snowy white)
+export const EMBER_LOOK = { body: '#e0553a', belly: '#ffd38a', dark: '#a8352a', stripe: '#f0b860', spike: '#ffcf5a', eye: '#3b7a2e', membrane: '#ffb36b', bone: '#c0392b', puff: '#ffd36a' };
+export const FROST_LOOK = { body: '#f4f8ff', belly: '#cfe9ff', dark: '#a9c8e8', stripe: '#a8d8ff', spike: '#8fd3ff', eye: '#3a7bd5', membrane: '#bfe6ff', bone: '#6aa8d8', puff: '#d8f4ff' };
 export const DRAGON_INFO = {
   ember: { name: 'Sir Ember', key: 'dragon-ember', color: '#e0553a' },
   long: { name: 'Lóng Mei', key: 'dragon-long', color: '#e23d3d' },
   fjola: { name: 'Fjola', key: 'dragon-fjola', color: '#2f8fb0' },
   quetzi: { name: 'Quetzi', key: 'dragon-quetzi', color: '#2fae6a' },
+  frost: { name: 'Frost', key: 'dragon-frost', color: '#7fc4f0' },
 };
 
 // A sparkly puff (instead of fire — Pinky Land dragons breathe sparkles!)
@@ -270,11 +274,12 @@ class SparklePuff {
 
 // ---- Sir Ember: a round, friendly castle-story dragon with bat wings
 export class WesternDragon {
-  constructor(scene, world, { home, yaw = 0, roam }) {
+  constructor(scene, world, { home, yaw = 0, roam, look = EMBER_LOOK, info = DRAGON_INFO.ember }) {
     this.scene = scene; this.world = world; this.home = home; this.homeYaw = yaw; this.roam = roam;
-    this.info = DRAGON_INFO.ember;
+    this.info = info;
     this.name = this.info.name;
-    const body = '#e0553a', belly = '#ffd38a', dark = '#a8352a';
+    const L = look;
+    const { body, belly, dark } = L;
     const skin = new THREE.MeshStandardMaterial({ map: scaleTexture(body, dark, belly), roughness: 0.55 });
     const plain = std(body, { roughness: 0.55 }), bellyM = std(belly, { roughness: 0.6 }), horn = std('#fff2d6', { roughness: 0.4 });
     this.root = new THREE.Group();
@@ -288,7 +293,7 @@ export class WesternDragon {
     this.bodyG.add(bel);
     // belly stripes
     for (let i = 0; i < 6; i++) {
-      const s = mesh(new THREE.TorusGeometry(0.62, 0.025, 6, 24, Math.PI), std('#f0b860'));
+      const s = mesh(new THREE.TorusGeometry(0.62, 0.025, 6, 24, Math.PI), std(L.stripe));
       s.rotation.set(0, Math.PI / 2, Math.PI); s.position.set(0, -0.28, -0.6 + i * 0.28);
       s.scale.set(1.05 - Math.abs(i - 2.5) * 0.08, 1, 1);
       this.bodyG.add(s);
@@ -313,14 +318,14 @@ export class WesternDragon {
     this.neckSpine = Array.from({ length: 10 }, () => new THREE.Vector3());
     this.tailSpine = Array.from({ length: 22 }, () => new THREE.Vector3());
     // spade on the tail tip
-    this.spade = mesh(new THREE.OctahedronGeometry(0.28, 0), std('#ffcf5a'));
+    this.spade = mesh(new THREE.OctahedronGeometry(0.28, 0), std(L.spike));
     this.spade.scale.set(1, 0.25, 1.4);
     scene.add(this.spade);
     // back spikes
     const spikeGeo = new THREE.ConeGeometry(0.12, 0.38, 8).translate(0, 0.19, 0);
-    this.tailSpikes = new DorsalRow(scene, 10, spikeGeo, std('#ffcf5a', { roughness: 0.4 }));
-    this.neckSpikes = new DorsalRow(scene, 5, spikeGeo, std('#ffcf5a', { roughness: 0.4 }));
-    for (let i = 0; i < 4; i++) { const sp = mesh(spikeGeo, std('#ffcf5a')); sp.position.set(0, 0.8, 0.9 - i * 0.55); sp.rotation.x = -0.4; sp.scale.setScalar(1.1); this.bodyG.add(sp); }
+    this.tailSpikes = new DorsalRow(scene, 10, spikeGeo, std(L.spike, { roughness: 0.4 }));
+    this.neckSpikes = new DorsalRow(scene, 5, spikeGeo, std(L.spike, { roughness: 0.4 }));
+    for (let i = 0; i < 4; i++) { const sp = mesh(spikeGeo, std(L.spike)); sp.position.set(0, 0.8, 0.9 - i * 0.55); sp.rotation.x = -0.4; sp.scale.setScalar(1.1); this.bodyG.add(sp); }
     // head
     this.head = new THREE.Group();
     scene.add(this.head);
@@ -331,7 +336,7 @@ export class WesternDragon {
     const chin = mesh(new RoundedBoxGeometry(0.52, 0.16, 0.6, 3, 0.07), bellyM);
     chin.position.set(0, -0.3, 0.45); this.head.add(chin);
     for (const s of [-1, 1]) {
-      const e = friendlyEye(0.16, '#3b7a2e');
+      const e = friendlyEye(0.16, L.eye);
       e.position.set(s * 0.27, 0.12, 0.3); e.rotation.y = s * 0.35;
       this.head.add(e);
       const brow = mesh(new THREE.CapsuleGeometry(0.05, 0.16, 4, 8), std(dark));
@@ -343,10 +348,10 @@ export class WesternDragon {
       hornG.position.set(s * 0.25, 0.38, -0.12); hornG.rotation.z = -s * 0.3;
       this.head.add(hornG);
       // little frilly ears
-      const ear = mesh(new THREE.ConeGeometry(0.12, 0.3, 4).scale(1, 1, 0.3), std('#ffb36b'));
+      const ear = mesh(new THREE.ConeGeometry(0.12, 0.3, 4).scale(1, 1, 0.3), std(L.membrane));
       ear.position.set(s * 0.48, 0.18, -0.05); ear.rotation.z = -s * 1.1; this.head.add(ear);
       // nostrils glow warmly
-      const n = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffcf6a' }));
+      const n = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: L.puff }));
       n.position.set(s * 0.12, 0.04, 0.83); this.head.add(n);
     }
     // a big smile
@@ -354,8 +359,8 @@ export class WesternDragon {
     smile.rotation.set(Math.PI, 0, Math.PI * 0.1); smile.position.set(0, -0.12, 0.83); smile.rotation.x = Math.PI + 0.2;
     this.head.add(smile);
     // wings
-    this.wings = [1, -1].map((s) => { const w = new DragonWing({ span: 3.0, chord: 1.7, membrane: '#ffb36b', bone: '#c0392b', side: s }); w.pivot.position.set(s * 0.55, 0.62, 0.45); this.bodyG.add(w.pivot); return w; });
-    this.puff = new SparklePuff(scene, '#ffd36a');
+    this.wings = [1, -1].map((s) => { const w = new DragonWing({ span: 3.0, chord: 1.7, membrane: L.membrane, bone: L.bone, side: s }); w.pivot.position.set(s * 0.55, 0.62, 0.45); this.bodyG.add(w.pivot); return w; });
+    this.puff = new SparklePuff(scene, L.puff);
     scene.add(this.root);
     // behaviour
     this.state = 'rest'; this.stateT = 50 + Math.random() * 20;

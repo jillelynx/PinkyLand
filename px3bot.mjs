@@ -1,6 +1,6 @@
 // Plays Storybook Chapter 3 (Jacinta the Explorer) start to finish with simulated keys.
 import { chromium } from 'playwright-core';
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 400, height: 260 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
 await page.goto(`file://${process.cwd()}/index.html?scene=storybook&fresh=1&chapter=3&quality=low&slow=100000`);

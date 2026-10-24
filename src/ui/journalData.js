@@ -18,6 +18,8 @@ export const JOURNAL = {
   marshmallow: { cat: 'friends', icon: '🌙', title: 'Marshmallow', text: 'A sleepy pinky who only wakes up at night. Marshmallow knows about moon flowers.' },
   // ---- Creatures
   buddy: { cat: 'creatures', icon: '🐕', title: 'Buddy', text: 'A dog with short little legs and a waggy tail. He follows me everywhere and is the goodest boy.' },
+  peaches: { cat: 'creatures', icon: '🐱', title: 'Peaches', text: 'A tiny orange and white kitten. She got lost in the park, so I carried her home to her mama.' },
+  clementine: { cat: 'creatures', icon: '🐈', title: 'Clementine', text: 'An orange tabby mama cat who lives by the blue house. She purred and licked Peaches when we brought her back.' },
   gil: { cat: 'creatures', icon: '🐈‍⬛', title: 'Gil', text: 'A black cat with short, shiny fur and yellow eyes. He naps in the sunny spot on the porch.' },
   joe: { cat: 'creatures', icon: '🐈‍⬛', title: 'Joe', text: 'A black cat with long, fluffy fur and green eyes. He loves being brushed and LOVES treats.' },
   molly: { cat: 'creatures', icon: '🐀', title: 'Molly', text: 'A gray and white rat with a pink nose. She is a super climber and saves snacks for later.' },
@@ -48,6 +50,15 @@ export const JOURNAL = {
   butterfly: { cat: 'creatures', icon: '🦋', title: 'Butterfly', text: 'There are orange ones, blue ones and pink ones. They like the flowers.' },
   firefly: { cat: 'creatures', icon: '✨', title: 'Firefly', text: 'Tiny lights that blink at night. It looks like stars came down to play.' },
   // ---- Treasures
+  snowflake: { cat: 'treasures', icon: '❄️', title: 'Magic Snowflakes', text: 'Giant glittering snowflakes hidden around Snowdrop Island. Every single one is different!', counter: true },
+  cocoa: { cat: 'friends', icon: '☕', title: 'Cocoa', text: 'A toasty-brown pinky who runs the hot-cocoa stand on Snowdrop Island. Extra marshmallows, always.' },
+  penguin: { cat: 'creatures', icon: '🐧', title: 'Penguins', text: 'They waddle around the frozen pond… then flop on their tummies and SLIDE! Wheee!' },
+  snowbunny: { cat: 'creatures', icon: '🐇', title: 'Snow Bunnies', text: 'Fluffy white bunnies with pink ears that hop through the magic warm snow.' },
+  sledding: { cat: 'treasures', icon: '🛷', title: 'Sledding', text: 'Zoom down the Big Sled Hill! Steer with A and D, push with W, brake with S.' },
+  snowman: { cat: 'treasures', icon: '⛄', title: 'Snowman', text: 'Three snowballs, a carrot nose and a cosy scarf. On the warm side they wear flower crowns!' },
+  snowpinky: { cat: 'treasures', icon: '🩷', title: 'Snow Pinky', text: 'A pinky made of snow. It looks just like Pinky — only chillier!' },
+  igloo: { cat: 'treasures', icon: '🏠', title: 'Igloo', text: 'A round house made of snow blocks. It’s surprisingly cosy inside!' },
+  hotspring: { cat: 'treasures', icon: '♨️', title: 'Hot Spring', text: 'A steamy, glowing pool of warm water on the magic side of Snowdrop Island.' },
   star: { cat: 'treasures', icon: '⭐', title: 'Dream Stars', text: 'Sparkly stars hidden all over Pinky Land. Pinky says they hold happy dreams.', counter: true },
   shell: { cat: 'treasures', icon: '🐚', title: 'Pink Shells', text: 'Found on the beach. If you listen you can hear the ocean.', counter: true },
   feather: { cat: 'treasures', icon: '🪶', title: 'Rainbow Feathers', text: 'They are up high where birds rest. Soft and shiny.', counter: true },
@@ -55,6 +66,7 @@ export const JOURNAL = {
   flower: { cat: 'treasures', icon: '🌸', title: 'Moon Flowers', text: 'They only glow at night. They smell like vanilla.', counter: true },
   cape: { cat: 'treasures', icon: '🦸', title: 'Sky Cape', text: 'A shiny blue cape! Hold jump in the air to glide like a bird.' },
   tent: { cat: 'treasures', icon: '⛺', title: 'Cozy Tent', text: 'We set up a tent by the fire and slept under the stars.' },
+  moonview: { cat: 'treasures', icon: '🌙', title: 'Moonview Cliff', text: 'We camped high on a cliff over the sea and watched the moon and the northern lights shimmer on the water.' },
   heart: { cat: 'treasures', icon: '💗', title: 'Kindness Hearts', text: 'Every time we help someone, a heart glows. Five hearts open the door to Pinky Land.', counter: true },
 };
 

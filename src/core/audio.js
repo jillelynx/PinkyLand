@@ -140,7 +140,7 @@ export class AudioEngine {
   updateAmbience(dt) {
     if (!this.started) return;
     const s = this.state, t = this.ctx.currentTime;
-    const outdoor = s.scene === 'earth' || s.scene === 'pinky';
+    const outdoor = s.scene === 'earth' || s.scene === 'pinky' || s.scene === 'snow';
     const set = (g, v) => g.gain.setTargetAtTime(v, t, 0.4);
     set(this.breezeGain, outdoor && !s.underwater ? 0.05 + (1 - s.night) * 0.04 : 0);
     set(this.waterGain, outdoor && !s.underwater ? s.nearWater * 0.18 : 0);
@@ -469,15 +469,17 @@ export class AudioEngine {
     }
   }
 
-  meow() {
+  // pitch > 1 is a tiny kitten mew, < 1 a grown-up cat; vol 0..1 (quieter when far away)
+  meow(pitch = 1, vol = 1) {
     if (!this.started) return;
     const c = this.ctx, t = c.currentTime;
     const o = c.createOscillator(); o.type = 'sawtooth';
     const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 4;
     const g = c.createGain();
-    o.frequency.setValueAtTime(520, t); o.frequency.linearRampToValueAtTime(760, t + 0.18); o.frequency.linearRampToValueAtTime(480, t + 0.55);
-    f.frequency.setValueAtTime(900, t); f.frequency.linearRampToValueAtTime(1800, t + 0.2); f.frequency.linearRampToValueAtTime(800, t + 0.55);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.06); g.gain.linearRampToValueAtTime(0, t + 0.6);
+    const k = pitch, len = pitch > 1 ? 0.4 : 0.55;
+    o.frequency.setValueAtTime(520 * k, t); o.frequency.linearRampToValueAtTime(760 * k, t + len * 0.33); o.frequency.linearRampToValueAtTime(480 * k, t + len);
+    f.frequency.setValueAtTime(900 * k, t); f.frequency.linearRampToValueAtTime(1800 * k, t + len * 0.36); f.frequency.linearRampToValueAtTime(800 * k, t + len);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16 * vol, t + 0.06); g.gain.linearRampToValueAtTime(0, t + len + 0.05);
     o.connect(f).connect(g).connect(this.sfxGain); o.start(t); o.stop(t + 0.65);
   }
 

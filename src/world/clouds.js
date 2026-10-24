@@ -35,6 +35,8 @@ export class Clouds {
     });
     this.bouncyMaterial = this.material.clone();
     this.bouncyMaterial.emissiveIntensity = 0.7;
+    // the high clouds thin out at night so they don't hide the stars
+    this.material.transparent = true;
     this.sky = [];
     const geos = [0, 1, 2, 3, 4].map(() => puffGeometry(rand, 8 + Math.floor(rand() * 5)));
     for (let i = 0; i < count; i++) {
@@ -85,6 +87,8 @@ export class Clouds {
     this.material.emissiveIntensity = 0.55 - night * 0.5;
     // at night the clouds turn dusky blue so the stars stay the stars of the show
     this.material.color.set('#ffffff').lerp(new THREE.Color('#2c3352'), night * 0.85);
+    this.material.opacity = 1 - night * 0.82;
+    this.material.depthWrite = night < 0.3;
     this.bouncyMaterial.emissive.copy(this.material.emissive).lerp(new THREE.Color('#ffd6ec'), 0.3);
     this.bouncyMaterial.emissiveIntensity = 0.7 - night * 0.4;
     for (const m of this.sky) {

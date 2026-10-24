@@ -236,6 +236,7 @@ export const COLLECTIBLE_INFO = {
   litter: { name: 'Litter', color: '#c8c8c8', emissive: '#000000' },
   cape: { name: 'Sky Cape', color: '#22a7e0', emissive: '#22a7e0' },
   bandage: { name: 'Bandage', color: '#ffe0c4', emissive: '#ffffff' },
+  snowflake: { name: 'Magic Snowflake', color: '#e8f6ff', emissive: '#7fd0ff' },
 };
 
 export function createCollectible(kind) {
@@ -244,6 +245,18 @@ export function createCollectible(kind) {
   const mat = new THREE.MeshStandardMaterial({ color: info.color, emissive: info.emissive, emissiveIntensity: 0.7, roughness: 0.35, metalness: 0.1 });
   let m;
   if (kind === 'star') m = new THREE.Mesh(starGeometry(), mat);
+  else if (kind === 'snowflake') {
+    // a six-armed ice crystal with little side branches
+    m = new THREE.Group();
+    const arm = new THREE.BoxGeometry(0.04, 0.42, 0.03), twig = new THREE.BoxGeometry(0.03, 0.13, 0.025);
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.Group(); g.rotation.z = (i / 6) * Math.PI * 2;
+      const a = new THREE.Mesh(arm, mat); a.position.y = 0.21; g.add(a);
+      for (const [y, sx] of [[0.24, 1], [0.24, -1], [0.34, 1], [0.34, -1]]) { const t = new THREE.Mesh(twig, mat); t.position.set(sx * 0.045, y, 0); t.rotation.z = -sx * 0.8; g.add(t); }
+      m.add(g);
+    }
+    m.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 6).rotateX(Math.PI / 2), mat));
+  }
   else if (kind === 'shell') { m = new THREE.Mesh(shellGeometry(), new THREE.MeshStandardMaterial({ color: info.color, emissive: info.emissive, emissiveIntensity: 0.3, roughness: 0.4, side: THREE.DoubleSide })); }
   else if (kind === 'feather') { m = new THREE.Mesh(featherGeometry(), new THREE.MeshStandardMaterial({ color: info.color, emissive: info.emissive, emissiveIntensity: 0.6, side: THREE.DoubleSide })); }
   else if (kind === 'seaglass') { m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15, 0), new THREE.MeshPhysicalMaterial({ color: info.color, emissive: info.emissive, emissiveIntensity: 0.5, roughness: 0.2, transmission: 0.4, thickness: 0.3 })); }

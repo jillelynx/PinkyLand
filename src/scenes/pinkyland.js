@@ -2,7 +2,7 @@
 // with a waterfall, bouncy clouds, a coral reef, a campfire and pinky friends.
 import * as THREE from 'three';
 import { Level } from './level.js';
-import { Terrain } from '../world/terrain.js';
+import { Terrain, sharedUniforms } from '../world/terrain.js';
 import { World } from '../world/world.js';
 import { Water } from '../world/water.js';
 import { Clouds } from '../world/clouds.js';
@@ -12,6 +12,9 @@ import { Creatures } from '../world/creatures.js';
 import { Pillow, PINKY_LOOK } from '../characters/pinky.js';
 import { addSeaLife, addBioluminescence } from '../world/sealife.js';
 import { addForestFriends } from '../world/forestFriends.js';
+import { RideMixin } from './riding.js';
+import { makeFerry } from '../world/snowStuff.js';
+import { DRAGON_KINDS, dragonsMet, dragonFound } from './dragonQuest.js';
 import { NPC } from '../characters/npc.js';
 import { WesternDragon, ChineseDragon, FeatheredSerpent, NordicSerpent, BellyButton, addDragonWings } from '../world/dragons.js';
 import { makeNoise2D, makeRandom, smoothstep, fbm, lerp, clamp, damp, angleDamp } from '../util/noise.js';
@@ -19,22 +22,21 @@ import { makeNoise2D, makeRandom, smoothstep, fbm, lerp, clamp, damp, angleDamp 
 const R = 118;
 const POND = { x: 22, z: 22, r: 15 };
 // Rainbow Falls: where the cliff face is (z) and where its stream starts
-const FALLS = { face: POND.z + 15, spring: POND.z + 31, lip: 10.35 };
+const FALLS = { face: POND.z + 15, spring: POND.z + 31, lip: 10.18 };
 const CAMP = { x: -20, z: -6 };
 const ARRIVE = { x: -4, z: -36 };
+// Moonview Cliff: a high headland on the east coast that looks out over the sea, where the
+// moon rises and the northern lights shimmer (and both are reflected in the water)
+const CLIFF_DIR = { x: Math.sin(1.22), z: -Math.cos(1.22) }; // pointing out to sea, a little north of east
+const CLIFF_TOP = 12;
+const CLIFF = { x: CLIFF_DIR.x * 84, z: CLIFF_DIR.z * 84 }; // the camp on top
+const cliffS = (x, z) => x * CLIFF_DIR.x + z * CLIFF_DIR.z; // distance out toward the sea
+const cliffT = (x, z) => -x * CLIFF_DIR.z + z * CLIFF_DIR.x; // distance sideways
 // homes of the friendly dragons (kept clear of trees)
 const EMBER_HOME = { x: 50, z: -46 };
 const LANTERN_HILL = { x: -62, z: -50 };
 const SUN_STEPS = { x: 60, z: 16 };
 const DRAGON_SPOTS = [EMBER_HOME, LANTERN_HILL, SUN_STEPS];
-// Jacinta's Dragon Quest: every kind of dragon to find (Frost lives on Snowdrop Island)
-export const DRAGON_KINDS = [
-  { key: 'dragon-ember', name: 'Sir Ember', kind: 'Castle-story dragon' },
-  { key: 'dragon-long', name: 'Lóng Mei', kind: 'Chinese dragon' },
-  { key: 'dragon-quetzi', name: 'Quetzi', kind: 'Feathered serpent' },
-  { key: 'dragon-fjola', name: 'Fjola', kind: 'Sea serpent' },
-  { key: 'dragon-frost', name: 'Frost', kind: 'Snow dragon' },
-];
 const PINKY = { who: 'Pinky', color: '#f08aa8', pitch: 1.4 };
 const J = { who: 'Jacinta', color: '#ff6fa8', pitch: 1.2 };
 const L = { who: 'Liev', color: '#2f7de1', pitch: 0.95 };
@@ -46,6 +48,7 @@ export class PinkyLandLevel extends Level {
     const s = game.state;
     s.pinky = s.pinky || { arrived: false, met: [], cape: false, tent: false };
     this.P = s.pinky;
+    this.rideEdge = R + 10; // dragons turn back near the edge of the sea
   }
 
   height(x, z) {
@@ -69,9 +72,19 @@ export class PinkyLandLevel extends Level {
     h = Math.max(h, lerp(h, 10.5 + n(x * 0.1, z * 0.1) * 0.4, cliff));
     // the stream's channel across the top of the cliff, starting at a little spring
     const along = smoothstep(FALLS.face + 0.4, FALLS.face + 1.2, z) * (1 - smoothstep(FALLS.spring - 0.5, FALLS.spring + 2.5, z));
-    const chan = (1 - smoothstep(1.3, 2.4, Math.abs(x - POND.x))) * along;
+    const chan = (1 - smoothstep(1.6, 2.7, Math.abs(x - POND.x))) * along;
     const spring = 1 - smoothstep(2.0, 3.4, Math.hypot(x - POND.x, z - FALLS.spring));
-    h = lerp(h, Math.min(h, 10.05), Math.max(chan, spring * cliff));
+    h = lerp(h, Math.min(h, 9.7), Math.max(chan, spring * cliff));
+    // Moonview Cliff headland: a gentle ramp up from inland, a flat top, then a sheer drop to the sea
+    {
+      const cs = cliffS(x, z), ct = Math.abs(cliffT(x, z)) + n(x * 0.07, z * 0.07) * 1.5;
+      const wide = 1 - smoothstep(8.5, 13, ct + Math.max(0, cs - 86) * 1.2);
+      if (cs > 46 && wide > 0) {
+        const edge = 91 + n(x * 0.15, z * 0.15) * 0.8;
+        if (cs <= edge) h = lerp(h, Math.max(h, CLIFF_TOP * smoothstep(50, 79, cs) + n(x * 0.2, z * 0.2) * 0.25 * smoothstep(70, 80, cs)), wide);
+        else h = lerp(h, lerp(CLIFF_TOP, Math.min(h, -6), smoothstep(edge, edge + 2.2, cs)), wide);
+      }
+    }
     // flat cozy spots
     const camp = 1 - smoothstep(5, 10, Math.hypot(x - CAMP.x, z - CAMP.z));
     h = lerp(h, 2.1, camp);
@@ -115,6 +128,8 @@ export class PinkyLandLevel extends Level {
       const slope = Math.abs(this.height(x + e, z) - this.height(x - e, z)) + Math.abs(this.height(x, z + e) - this.height(x, z - e));
       if (slope > 2.2 && h > 0.5 && !(pondBank && z < POND.z + 11)) out.lerp(rock, smoothstep(2.2, 4, slope));
       if (h > 12) out.lerp(new THREE.Color('#d8f0b0'), 0.2);
+      // pebbly stream bed on top of the falls
+      if (h > 9 && ((Math.abs(x - POND.x) < 2.7 && z > FALLS.face && z < FALLS.spring + 1) || Math.hypot(x - POND.x, z - FALLS.spring) < 3.8)) out.lerp(new THREE.Color('#7d8a8f'), 0.75);
     };
     this.terrain = new Terrain({ size: 400, segments: 260, height: (x, z) => this.height(x, z), color });
     this.scene.add(this.terrain.mesh);
@@ -131,14 +146,17 @@ export class PinkyLandLevel extends Level {
     const q = g.engine.q;
     const slopeAt = (x, z) => { const nn = this.terrain.getNormal(x, z); return 1 - nn.y; };
     const nearCamp = (x, z) => Math.hypot(x - CAMP.x, z - CAMP.z) < 4.5;
+    // no grass growing up through the stream on top of Rainbow Falls
+    const inStream = (x, z) => (Math.abs(x - POND.x) < 2.7 && z > FALLS.face - 0.8 && z < FALLS.spring + 1) || Math.hypot(x - POND.x, z - FALLS.spring) < 3.8;
+    this.inStream = inStream;
     this.scene.add(createGrass(this.terrain, {
       count: Math.floor(230000 * q.grass), area: 250, center: [0, 0], height: [0.22, 0.6], width: [0.4, 0.62],
-      where: (x, z, h) => (h > 0.9 && slopeAt(x, z) < 0.35 && !nearCamp(x, z) ? 1 : 0),
+      where: (x, z, h) => (h > 0.9 && slopeAt(x, z) < 0.35 && !nearCamp(x, z) && !inStream(x, z) ? 1 : 0),
       tint: (x, z, c, r) => { if (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.35) c.offsetHSL(-0.12 + r() * 0.02, -0.1, 0.05); },
     }));
     this.scene.add(createFlowers(this.terrain, {
       count: Math.floor(9000 * q.grass), area: 240, center: [0, 0],
-      where: (x, z, h) => (h > 1.0 && slopeAt(x, z) < 0.3 ? (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.3 ? 1 : 0.18) : 0),
+      where: (x, z, h) => (h > 1.0 && slopeAt(x, z) < 0.3 && !inStream(x, z) ? (noise(x * 0.015 - 4, z * 0.015 + 2) > 0.3 ? 1 : 0.18) : 0),
     }));
     const treeSpots = [];
     for (let i = 0; i < 260; i++) {
@@ -147,13 +165,14 @@ export class PinkyLandLevel extends Level {
       if (h < 1.5 || slopeAt(x, z) > 0.3) continue;
       if (Math.hypot(x, z + 10) < 28) continue; // keep the central meadow open
       if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 4) continue;
-      if (Math.hypot(x - CAMP.x, z - CAMP.z) < 9 || Math.hypot(x - ARRIVE.x, z - ARRIVE.z) < 9) continue;
+      if (Math.hypot(x - CAMP.x, z - CAMP.z) < (z < CAMP.z + 4 ? 30 : 16) || Math.hypot(x - ARRIVE.x, z - ARRIVE.z) < 9) continue; // a big open clearing for stargazing
+      if (Math.hypot(x - CLIFF.x, z - CLIFF.z) < 18) continue;
       if (DRAGON_SPOTS.some((d) => Math.hypot(x - d.x, z - d.z) < 10)) continue;
       const blossom = rand() < 0.45;
       treeSpots.push({ x, z, kind: rand() < 0.3 ? 'tall' : 'round', color: blossom ? ['#ffb3d1', '#ffc9e0', '#f7a8c8', '#fbd3ff'][Math.floor(rand() * 4)] : ['#7cc96b', '#8fd47a', '#6fbf5f'][Math.floor(rand() * 3)] });
     }
     // a few hand-placed blossom trees framing the pond and camp
-    treeSpots.push({ x: POND.x - 15, z: POND.z - 6, kind: 'round', color: '#ffb3d1', scale: 1.3 }, { x: POND.x + 16, z: POND.z - 2, kind: 'round', color: '#fbd3ff', scale: 1.2 }, { x: CAMP.x - 7, z: CAMP.z - 4, kind: 'round', color: '#ffc9e0' }, { x: CAMP.x + 6, z: CAMP.z - 6, kind: 'tall', color: '#7cc96b' });
+    treeSpots.push({ x: POND.x - 15, z: POND.z - 6, kind: 'round', color: '#ffb3d1', scale: 1.3 }, { x: POND.x + 16, z: POND.z - 2, kind: 'round', color: '#fbd3ff', scale: 1.2 }, { x: CAMP.x - 11, z: CAMP.z + 14, kind: 'round', color: '#ffc9e0' }, { x: CAMP.x + 12, z: CAMP.z + 15, kind: 'tall', color: '#7cc96b' });
     this.mapTitle = 'Pinky Land';
     this.mapFeatures = treeSpots.map((t) => ({ type: 'tree', x: t.x, z: t.z, color: t.color, r: 2.0 * (t.scale || 1) }));
     this.mapFeatures.push({ type: 'label', x: 0, z: R + 6, text: 'Coral Reef' }, { type: 'label', x: -95, z: 100, text: 'Dreamy Sea' }, { type: 'falls', x: POND.x, z: POND.z + 14.5 }, { type: 'tent', x: CAMP.x - 2.5, z: CAMP.z - 2 }, { type: 'fire', x: CAMP.x, z: CAMP.z });
@@ -166,6 +185,7 @@ export class PinkyLandLevel extends Level {
       const x = (rand() - 0.5) * 220, z = (rand() - 0.5) * 220;
       if (this.terrain.getHeight(x, z) < 1.2 || Math.hypot(x, z + 10) < 18) continue;
       if (DRAGON_SPOTS.some((d) => Math.hypot(x - d.x, z - d.z) < 8)) continue;
+      if (Math.hypot(x - CLIFF.x, z - CLIFF.z) < 14) continue;
       bushSpots.push({ x, z, color: rand() < 0.3 ? '#e9a8d0' : '#6fbf5f' });
     }
     this.scene.add(createBushes(this.terrain, bushSpots));
@@ -173,7 +193,9 @@ export class PinkyLandLevel extends Level {
     const rockSpots = [];
     for (let i = 0; i < 40; i++) {
       const a = rand() * 6.28, r = R - 20 + rand() * 12;
-      rockSpots.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 0.6 + rand() * 1.4 });
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (Math.hypot(x - CLIFF.x, z - CLIFF.z) < 16) continue;
+      rockSpots.push({ x, z, scale: 0.6 + rand() * 1.4 });
     }
     rockSpots.push({ x: POND.x - 8, z: POND.z + 12, scale: 1.8 }, { x: POND.x + 9, z: POND.z + 13, scale: 2.2 }, { x: POND.x + 13, z: POND.z + 5, scale: 1.2, flat: true });
     for (const r of rockSpots) this.mapFeatures.push({ type: 'rock', x: r.x, z: r.z, r: r.scale || 1 });
@@ -200,21 +222,24 @@ export class PinkyLandLevel extends Level {
     }
     this.scene.add(createLilyPads(pads, 0));
     // waterfall
-    const wf = new Waterfall(this.scene, { x: POND.x, z: FALLS.face + 0.7, top: FALLS.lip, bottom: -0.3, width: 3.6, yaw: Math.PI, bulge: 3.4, lipBack: 0.9 });
+    const wf = new Waterfall(this.scene, { x: POND.x, z: FALLS.face + 0.7, top: FALLS.lip, bottom: -0.3, width: 4.0, yaw: Math.PI, bulge: 3.4, lipBack: 1.1 });
     this.waterfalls.push(wf);
     this.landmarks.push({ x: POND.x, z: POND.z, icon: '💧', label: 'Sparkle Pond' }, { x: POND.x, z: POND.z + 16, icon: '🌈', label: 'Rainbow Falls' });
-    // a stream on top of the cliff leading to the falls
-    const sLen = FALLS.spring - (FALLS.face + 0.4);
-    const stream = new THREE.Mesh(new THREE.PlaneGeometry(3.2, sLen, 4, 20), wf.mat);
+    // a stream on top of the cliff: clear blue water that flows from the spring to the lip
+    const sLen = FALLS.spring - (FALLS.face + 0.2);
+    const streamMat = makeStreamMaterial();
+    this.streamMat = streamMat;
+    const stream = new THREE.Mesh(new THREE.PlaneGeometry(4.4, sLen, 6, 24), streamMat);
     stream.rotation.x = -Math.PI / 2;
-    stream.position.set(POND.x, FALLS.lip + 0.02, FALLS.face + 0.4 + sLen / 2);
-    stream.renderOrder = 6;
+    stream.position.set(POND.x, FALLS.lip + 0.02, FALLS.face + 0.2 + sLen / 2);
+    stream.renderOrder = 5;
     this.scene.add(stream);
     // the little spring pool the stream bubbles out of
-    const springPool = new THREE.Mesh(new THREE.CircleGeometry(2.9, 28), wf.mat);
+    const springPool = new THREE.Mesh(new THREE.CircleGeometry(3.0, 32), streamMat.clone());
+    springPool.material.uniforms = { ...streamMat.uniforms, uPool: { value: 1 } };
     springPool.rotation.x = -Math.PI / 2;
     springPool.position.set(POND.x, FALLS.lip + 0.03, FALLS.spring);
-    springPool.renderOrder = 6;
+    springPool.renderOrder = 5;
     this.scene.add(springPool);
     rockSpots.length = 0;
     for (const [dx, dz, sc] of [[-3.4, 1.2, 1.1], [3.1, 0.6, 0.9], [-1.5, 3.4, 0.8], [2.0, 3.1, 1.0], [-3.4, -1.8, 0.7], [3.4, -1.6, 0.75]]) rockSpots.push({ x: POND.x + dx, z: FALLS.spring + dz, scale: sc });
@@ -271,6 +296,8 @@ export class PinkyLandLevel extends Level {
     this.landmarks.push({ x: CAMP.x, z: CAMP.z, icon: '🔥', label: 'Cozy Camp', always: true });
     this.addInteractable({ pos: new THREE.Vector3(CAMP.x, campH, CAMP.z), radius: 3.2, label: () => (this.sitting ? '' : 'Sit by the campfire'), enabled: () => !this.sitting, action: () => this.sitByFire() });
 
+    this.buildMoonviewCliff();
+
     // arrival stone circle (the Dream Door)
     const arrH = this.terrain.getHeight(ARRIVE.x, ARRIVE.z);
     for (let i = 0; i < 10; i++) {
@@ -314,18 +341,174 @@ export class PinkyLandLevel extends Level {
     this.buildDragons();
     this.buildCollectibles();
 
+    this.buildFerryDock();
+
     // ---- player
-    const spawn = this.P.arrived && g.state.lastPos ? g.state.lastPos : { x: ARRIVE.x, z: ARRIVE.z };
+    let spawn = this.P.arrived && g.state.lastPos ? g.state.lastPos : { x: ARRIVE.x, z: ARRIVE.z };
+    if (this.arriveAt?.ferry) spawn = this.dockSpawn;
     this.setupPlayer(new THREE.Vector3(spawn.x, 0, spawn.z), Math.PI * 0.9);
     if (this.P.cape) this.player.setCape(true);
+  }
+
+  // ---- Moonview Cliff: a second camp high on a cliff over the sea, for watching the
+  // moon rise and the northern lights dance (and shimmer in the water below)
+  buildMoonviewCliff() {
+    const T = (x, z) => this.terrain.getHeight(x, z);
+    const D = CLIFF_DIR, side = { x: -D.z, z: D.x };
+    const at = (s, t) => ({ x: D.x * s + side.x * t, z: D.z * s + side.z * t });
+    const fireH = T(CLIFF.x, CLIFF.z);
+    const fire = new Campfire(this.scene, new THREE.Vector3(CLIFF.x, fireH, CLIFF.z));
+    this.campfires.push(fire);
+    this.world.addColliders([fire.collider]);
+    this.cliffFire = fire;
+    const wood = new THREE.MeshStandardMaterial({ color: '#8a5a3c', roughness: 1 });
+    // two log benches on the inland side of the fire, facing out to sea
+    this.cliffSeats = [];
+    for (const t of [-1.3, 1.3]) {
+      const p = at(84 - 2.1, t);
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 1.7, 10), wood);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = Math.atan2(D.x, D.z) + Math.PI / 2;
+      log.position.set(p.x, T(p.x, p.z) + 0.2, p.z);
+      log.castShadow = log.receiveShadow = true;
+      this.scene.add(log);
+      this.cliffSeats.push(p);
+    }
+    // a cozy little tent behind the benches
+    const tent = createTent();
+    const tp = at(84 - 6, -3.2);
+    tent.position.set(tp.x, T(tp.x, tp.z), tp.z);
+    tent.rotation.y = Math.atan2(D.x, D.z);
+    this.scene.add(tent);
+    this.world.addColliders([{ type: 'box', x: tp.x, z: tp.z, hw: 1.1, hd: 1.1, top: T(tp.x, tp.z) + 1.4, bottom: T(tp.x, tp.z) - 1, noStand: true }]);
+    // a wooden fence along the cliff edge so nobody tumbles off by accident
+    const fenceS = 89.6, postGeo = new THREE.CylinderGeometry(0.07, 0.08, 1.0, 6), railGeo = new THREE.BoxGeometry(0.08, 0.08, 1.62);
+    for (let t = -8; t <= 8.01; t += 1.6) {
+      const p = at(fenceS, t), h = T(p.x, p.z);
+      const post = new THREE.Mesh(postGeo, wood); post.position.set(p.x, h + 0.45, p.z); post.castShadow = true; this.scene.add(post);
+      if (t < 8) for (const y of [0.45, 0.85]) {
+        const q = at(fenceS, t + 0.8), hq = T(q.x, q.z);
+        const rail = new THREE.Mesh(railGeo, wood);
+        rail.position.set(q.x, Math.max(h, hq) + y, q.z);
+        rail.rotation.y = Math.atan2(side.x, side.z);
+        this.scene.add(rail);
+      }
+    }
+    const fm = at(fenceS, 0);
+    this.world.addColliders([{ type: 'box', x: fm.x, z: fm.z, hw: 0.2, hd: 8.2, top: fireH + 1.0, bottom: fireH - 3, rot: Math.atan2(side.x, side.z), noStand: true }]);
+    // twinkly lanterns on the fence
+    const lampMat = new THREE.MeshBasicMaterial({ color: '#ffd27a' });
+    for (const t of [-6.4, 0, 6.4]) {
+      const p = at(fenceS, t), lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), lampMat);
+      lamp.position.set(p.x, T(p.x, p.z) + 1.08, p.z); this.scene.add(lamp);
+    }
+    const sign = createSign('Moonview Cliff\n🌙 night sea views', { color: '#e8ecff' });
+    const sp = at(78, 4.2); sign.position.set(sp.x, T(sp.x, sp.z), sp.z); sign.rotation.y = Math.atan2(-D.x, -D.z); this.scene.add(sign);
+    this.landmarks.push({ x: CLIFF.x, z: CLIFF.z, icon: '🌙', label: 'Moonview Cliff', always: true });
+    this.mapFeatures.push({ type: 'fire', x: CLIFF.x, z: CLIFF.z }, { type: 'label', x: CLIFF.x - 6, z: CLIFF.z + 9, text: 'Moonview Cliff' });
+    this.addInteractable({ pos: new THREE.Vector3(CLIFF.x, fireH, CLIFF.z), radius: 3.4, label: () => (this.sitting ? '' : 'Sit and watch the night sea 🌙'), enabled: () => !this.sitting, action: () => this.sitAtCliff() });
+  }
+
+  // the view from Moonview Cliff: out over the sea toward the rising moon, with the
+  // northern lights off to the left
+  cliffView() {
+    const D = CLIFF_DIR, h = this.terrain.getHeight(CLIFF.x, CLIFF.z);
+    const eye = new THREE.Vector3(CLIFF.x - D.x * 4.2 - D.z * 1.6, h + 3.3, CLIFF.z - D.z * 4.2 + D.x * 1.6);
+    // look a little to the right of straight out (toward the moon), down at the sea and up at the sky
+    const a = Math.atan2(D.x, -D.z) + 0.1;
+    const look = new THREE.Vector3(eye.x + Math.sin(a) * 60, h + 1, eye.z - Math.cos(a) * 60);
+    return [eye, look];
+  }
+
+  async sitAtCliff() {
+    const g = this.game;
+    this.sitting = true;
+    this.cutscene = true;
+    const h = this.terrain.getHeight(CLIFF.x, CLIFF.z);
+    const D = CLIFF_DIR;
+    const seat = (root, model, p) => {
+      const seatDrop = model.dims ? model.dims.shin * model.body.scale.y : 0;
+      root.position.set(p.x, this.terrain.getHeight(p.x, p.z) + 0.44 - seatDrop, p.z);
+      root.rotation.y = Math.atan2(D.x, D.z);
+      model.anim.sit = true; model.anim.speed = 0; model.anim.swim = false; model.anim.grounded = true;
+    };
+    this.player.frozen = true;
+    seat(this.player.root, this.player.model, this.cliffSeats[0]);
+    this.player.yaw = this.player.root.rotation.y;
+    const extra = [this.cliffSeats[1], { x: this.cliffSeats[1].x - D.x * 0.9 + D.z * 0.9, z: this.cliffSeats[1].z - D.z * 0.9 - D.x * 0.9 }];
+    this.followers.forEach((f, i) => { if (!extra[i]) return; f.frozen = true; seat(f.root, f.model, extra[i]); f.yaw = f.root.rotation.y; });
+    const [eye, look] = this.cliffView();
+    this.rig.setOverride(eye, look);
+    let done = false;
+    while (!done) {
+      const night = this.dayNight.nightAmount > 0.6;
+      const choices = night
+        ? [{ text: 'Watch the moon and the northern lights 🌙', value: 'watch' }, { text: 'Sleep until morning 🌅', value: 'sleep' }, { text: 'Get up and keep exploring', value: 'up' }]
+        : [{ text: 'Wait here until night falls 🌌', value: 'night' }, { text: 'Get up and keep exploring', value: 'up' }];
+      const c = await g.ui.dialogue([line(PINKY, night ? 'Look how the moon and the northern lights shimmer on the sea… it’s like there are two skies!' : 'This is the best spot on the whole island to watch the night sky over the sea.', { choices })]);
+      if (c === 'night' || c === 'sleep') {
+        g.ui.fade(true);
+        await new Promise((r) => setTimeout(r, 1400));
+        this.dayNight.setTime(c === 'sleep' ? 0.255 : 0.8);
+        await new Promise((r) => setTimeout(r, 600));
+        g.ui.fade(false);
+        await new Promise((r) => setTimeout(r, 900));
+        if (c === 'sleep') { await g.ui.dialogue([line(PINKY, 'Good morning! The sea is all sparkly with sunshine now. ☀️')]); done = true; }
+        else await g.ui.dialogue([line(J, 'Whoa… the moon is coming up out of the sea!'), line(L, 'And look over there — green and pink lights, dancing! Those are the northern lights.'), line(PINKY, 'And they’re reflected in the water, all wobbly and shimmery. 🩷')]);
+        this.journalCheck('moonview', 'Moonview Cliff');
+      } else if (c === 'watch') {
+        this.journalCheck('moonview', 'Moonview Cliff');
+        await g.ui.dialogue([
+          line(J, 'The moon made a glittery path on the water, all the way to us.'),
+          line(L, 'It’s like a road you could walk on to get to the moon.'),
+          line(PINKY, 'The northern lights happen when tiny bits from the sun hit the air way up high and make it glow. Isn’t that magical?'),
+        ]);
+      } else done = true;
+    }
+    this.rig.setOverride(null);
+    this.cutscene = false;
+    this.player.model.anim.sit = false;
+    this.followers.forEach((f) => { f.model.anim.sit = false; f.frozen = false; });
+    this.player.frozen = false;
+    this.player.pos.x -= D.x * 1.2; this.player.pos.z -= D.z * 1.2;
+    this.sitting = false;
+  }
+
+  // ---- the little ferry to Snowdrop Island, at a wooden dock on the north shore
+  buildFerryDock() {
+    const g = this.game, T = (x, z) => this.terrain.getHeight(x, z);
+    const dir = new THREE.Vector2(-0.33, -1).normalize();
+    let shore = 90;
+    for (let r = 60; r < 140; r += 0.5) if (T(dir.x * r, dir.y * r) < -0.4) { shore = r; break; }
+    const yaw = Math.atan2(dir.x, dir.y); // the dock points out to sea
+    const r0 = shore - 7, r1 = shore + 9, top = 1.15, len = r1 - r0, mid = (r0 + r1) / 2;
+    const at = (r, side = 0) => new THREE.Vector3(dir.x * r + Math.cos(yaw) * side, 0, dir.y * r - Math.sin(yaw) * side);
+    const wood = new THREE.MeshStandardMaterial({ color: '#b8875a', roughness: 0.9 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.2, len), wood);
+    const m = at(mid); deck.position.set(m.x, top - 0.1, m.z); deck.rotation.y = yaw; deck.castShadow = deck.receiveShadow = true; this.scene.add(deck);
+    for (let r = r0 + 0.5; r < r1; r += 2.4) for (const sd of [-1.2, 1.2]) {
+      const p = at(r, sd); const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 4, 8), wood); post.position.set(p.x, top - 2, p.z); this.scene.add(post);
+    }
+    this.world.addColliders([{ type: 'box', x: m.x, z: m.z, hw: 1.3, hd: len / 2, top, bottom: -3, rot: yaw }]);
+    const boat = makeFerry(); const bp = at(r1 - 2, 2.6);
+    boat.position.set(bp.x, 0.35, bp.z); boat.rotation.y = yaw; this.scene.add(boat);
+    this.ferry = boat;
+    this.updaters.push(() => { boat.position.y = 0.3 + Math.sin(this.time * 1.3) * 0.06; boat.rotation.z = Math.sin(this.time * 0.9) * 0.03; });
+    const end = at(r1 - 1.5, 0.5); end.y = top;
+    const sp = at(r0 - 3); this.dockSpawn = { x: sp.x, z: sp.z };
+    const sign = createSign('Snow Ferry\n❄️ Snowdrop Island', { color: '#e8f6ff' });
+    const sgn = at(r0 - 1.5, 2.4); sign.position.set(sgn.x, T(sgn.x, sgn.z), sgn.z); sign.rotation.y = yaw + Math.PI; this.scene.add(sign);
+    this.addInteractable({ pos: end, radius: 3.2, label: 'Sail to Snowdrop Island ❄️', action: () => g.goToSnowIsland() });
+    this.landmarks.push({ x: m.x, z: m.z, icon: '⛵', label: 'Snow Ferry', always: true });
+    this.ferryPos = end;
   }
 
   _mountains(rand) {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
     const base = new THREE.Color('#9c8fd0'), snow = new THREE.Color('#fff0f6');
-    for (let i = 0; i < 16; i++) {
-      const a = -Math.PI * 0.95 + (i / 15) * Math.PI * 0.9 + (rand() - 0.5) * 0.1; // north side, behind the island
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI * 0.95 + (i / 11) * Math.PI * 0.5 + (rand() - 0.5) * 0.1; // north-west side, behind the island (the east stays open sea for Moonview Cliff)
       const dist = 330 + rand() * 120;
       const h = 70 + rand() * 90;
       const g = new THREE.ConeGeometry(h * 0.9, h, 9, 6);
@@ -545,129 +728,11 @@ export class PinkyLandLevel extends Level {
   meet(key) {
     if (this.P.met.includes(key)) return;
     this.P.met.push(key); this.game.saveGame();
-    if (DRAGON_KINDS.some((k) => k.key === key)) this.dragonFound(key);
+    if (DRAGON_KINDS.some((k) => k.key === key)) dragonFound(this, key);
   }
 
-  // ---- Jacinta's Dragon Quest: find every kind of dragon (some live on Snowdrop Island)
-  dragonCount() { return DRAGON_KINDS.filter((k) => this.P.met.includes(k.key) || (this.game.state.snow?.met || []).includes(k.key)).length; }
-  dragonFound(key) {
-    const g = this.game, n = this.dragonCount(), kind = DRAGON_KINDS.find((k) => k.key === key);
-    if (!g.state.journal.includes('dragonquest')) g.state.journal.push('dragonquest');
-    g.ui.toast('🐉', `Dragon Quest: <b>${kind.kind}</b> found! (${n} / ${DRAGON_KINDS.length})`);
-    if (n === DRAGON_KINDS.length && !this.P.dragonMaster) {
-      this.P.dragonMaster = true; g.saveGame();
-      setTimeout(() => g.ui.dialogue([
-        line(J, 'Pinky! I found them ALL! Every kind of dragon!'),
-        line(PINKY, 'You’re a real Dragon Explorer! The dragons made you something… a shiny Dragon Scale badge! ✨'),
-      ]), 2500);
-      this.journalCheck('dragonbadge', 'Dragon Explorer Badge');
-    } else if (n < DRAGON_KINDS.length && n === 1) {
-      setTimeout(() => g.ui.say(`Jacinta wants to find every kind of dragon! ${DRAGON_KINDS.length - n} more to go. 🐉`, 5), 2500);
-    }
-  }
+  dragonCount() { return dragonsMet(this.game.state).length; }
 
-  // ---- riding a dragon
-  startRide(d) {
-    const g = this.game, P = this.player;
-    const kind = d instanceof WesternDragon ? 'wings' : d instanceof NordicSerpent ? 'swim' : 'serpent';
-    d.startRide();
-    const yaw = kind === 'wings' ? d.yaw : d.rideYaw();
-    this.riding = { d, kind, yaw, speed: 0, vy: kind === 'wings' ? 5 : 0, bank: 0, t: 0, lift: kind === 'wings' ? 1.6 : 0 };
-    this._rideDist = this.rig.targetDistance;
-    this.rig.targetDistance = kind === 'wings' ? 11 : 9;
-    P.model.anim.sit = true;
-    for (const f of this.followers) f.root.visible = false; // friends wait at home while you fly
-    g.audio.portal?.();
-    g.ui.toast('🐉', kind === 'swim'
-      ? '<b>Riding Fjola!</b> W faster · S slower · A D turn · E hop off'
-      : `<b>Riding ${d.name}!</b> W faster · S slower · A D turn · Space up · Shift down · E hop off`);
-    if (this.P.rides === undefined) this.P.rides = 0;
-    this.P.rides++;
-  }
-
-  endRide() {
-    const r = this.riding; if (!r) return;
-    const P = this.player, W = this.world;
-    this.riding = null;
-    r.d.endRide();
-    P.model.anim.sit = false;
-    for (const f of this.followers) { f.root.visible = true; }
-    this.rig.targetDistance = this._rideDist || 7;
-    // hop off to the side (and fall or glide down if you were up high)
-    const side = new THREE.Vector3(Math.cos(r.yaw), 0, -Math.sin(r.yaw));
-    const at = r.d.seat(new THREE.Vector3()).addScaledVector(side, r.kind === 'wings' ? 2.2 : 1.6);
-    P.pos.copy(at);
-    P.pos.y = Math.max(at.y, W.groundHeight(at.x, at.z, at.y + 2) + 0.05);
-    P.vel.set(0, 2, 0);
-    for (const f of this.followers) f.place?.(P.pos.x + 1, P.pos.z + 1);
-  }
-
-  rideSeat() {
-    const r = this.riding, P = this.player;
-    r.d.seat(P.pos);
-    P.vel.set(0, 0, 0);
-    P.yaw = r.yaw; P.root.rotation.set(0, r.yaw, 0);
-    P.model.anim.speed = 0; P.model.anim.grounded = true; P.model.anim.sit = true;
-  }
-
-  rideUpdate(dt) {
-    const r = this.riding, inp = this.game.input, W = this.world, d = r.d;
-    dt = Math.min(dt, 1 / 20);
-    r.t += dt;
-    let turn = 0, thr = 0, up = 0;
-    if (inp.down('KeyA', 'ArrowLeft')) turn += 1;
-    if (inp.down('KeyD', 'ArrowRight')) turn -= 1;
-    if (inp.down('KeyW', 'ArrowUp')) thr += 1;
-    if (inp.down('KeyS', 'ArrowDown')) thr -= 1;
-    if (inp.down('Space')) up += 1;
-    if (inp.down('ShiftLeft', 'ShiftRight', 'KeyX')) up -= 1;
-    const pad = inp.padState;
-    if (pad) { turn -= pad.lx; thr -= pad.ly; if (pad.jump) up += 1; if (pad.dive || pad.run) up -= 1; }
-    turn = clamp(turn, -1, 1); thr = clamp(thr, -1, 1); up = clamp(up, -1, 1);
-    if (inp.hit('KeyE', 'Pad_interact', 'Enter')) { this.endRide(); return; }
-    const pos = r.kind === 'wings' ? d.pos : d.headPos;
-    const wl = W.waterLevel;
-    const floor = (x, z) => r.kind === 'wings' ? Math.max(W.terrainHeight(x, z), wl - 0.3) : Math.max(W.terrainHeight(x, z), wl) + 1.4;
-    const grounded = r.kind === 'wings' && pos.y - floor(pos.x, pos.z) < 0.25 && r.lift <= 0;
-    // speeds: cruising, fast and slow
-    const [cruise, fast, slow] = r.kind === 'wings' ? [10, 19, 2.5] : r.kind === 'serpent' ? [8, 15, 2] : [6, 11, 0];
-    let want = thr > 0 ? lerp(cruise, fast, thr) : lerp(cruise, slow, -thr);
-    if (grounded) want = Math.max(0, thr) * 3; // walking along the ground
-    r.speed = damp(r.speed, want, 1.6, dt);
-    r.yaw += turn * (grounded ? 1.8 : 1.3) * dt;
-    r.bank = damp(r.bank, -turn * 0.35 * Math.min(1, r.speed / 8), 3, dt);
-    // keep inside the sky above Pinky Land: gently turn back near the edge
-    const dist = Math.hypot(pos.x, pos.z), edge = R + 10;
-    if (dist > edge - 15) {
-      const home = Math.atan2(-pos.x, -pos.z);
-      r.yaw = angleDamp(r.yaw, home, clamp((dist - edge + 15) / 15, 0, 1) * 1.5, dt);
-      if (!this._edgeSaid || this.time - this._edgeSaid > 12) { this._edgeSaid = this.time; this.game.ui.say(`${d.name}: “Let’s stay close to Pinky Land!”`, 3); }
-    }
-    const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw);
-    let nx = pos.x + fx * r.speed * dt, nz = pos.z + fz * r.speed * dt;
-    if (r.kind === 'swim') {
-      // Fjola only swims where the water is deep
-      if (W.terrainHeight(nx, nz) > wl - 1.2) { nx = pos.x; nz = pos.z; r.speed = 0; if (!this._shallowSaid || this.time - this._shallowSaid > 8) { this._shallowSaid = this.time; this.game.ui.say('Fjola: “Too shallow for me! Let’s turn around.”', 3); } }
-      pos.x = nx; pos.z = nz;
-    } else {
-      // up and down
-      if (r.lift > 0) { r.lift -= dt; up = Math.max(up, 1); }
-      r.vy = damp(r.vy, up * 7 + (r.kind === 'wings' && !grounded && thr > 0.5 ? 0.3 : 0), 3, dt);
-      pos.x = nx; pos.z = nz;
-      pos.y = Math.min(70, pos.y + r.vy * dt);
-      const fl = floor(pos.x, pos.z);
-      if (pos.y < fl) { pos.y = fl; r.vy = Math.max(0, r.vy); }
-    }
-    if (r.kind === 'wings') {
-      d.yaw = r.yaw; d.rideBank = r.bank;
-      d.rideFly = grounded ? 0.35 : 1;
-    }
-    this.rideSeat();
-    this.player.forwardMoving = r.speed > 1;
-    // the camera swings round behind the dragon (unless you're dragging to look around)
-    if (!inp.mouse.dragging && Math.abs(inp.mouse.dx) < 1) this.rig.yaw = angleDamp(this.rig.yaw, r.yaw + Math.PI, 2.2, dt);
-    this.game.ui.prompt('E: hop off');
-  }
 
   buildCollectibles() {
     const g = this.game;
@@ -856,6 +921,7 @@ export class PinkyLandLevel extends Level {
       const d = this.dragons.slice(1).find((x) => !met(x.info.key) && x.canTalk);
       if (d) return { text: `${d.name} the dragon is visiting right now! Hurry and say hello.`, target: d.talkPos().clone() };
     }
+    if (!g.state.snow?.visited && met('dragon-ember')) return { text: 'A little ferry boat on the north shore sails to Snowdrop Island — a snowy island! I heard a snow dragon lives there. ❄️', target: this.ferryPos.clone() };
     // nearest star (or anything) not yet found
     const p = this.player.pos;
     const left = this.collectibles.filter((c) => !c.taken && (!c.nightOnly || this.dayNight.isNight()));
@@ -937,6 +1003,7 @@ export class PinkyLandLevel extends Level {
   update(dt) {
     if (this.bellyButton) this.bellyButton.root.visible = this.game.state.avatar !== 'bellybutton';
     this.updateBigPinky(dt);
+    if (this.streamMat) this.streamMat.uniforms.uNight.value = this.dayNight.nightAmount;
     this.biolum?.update(this.player.pos);
     this.baseUpdate(dt);
     const p = this.player.pos;
@@ -948,4 +1015,52 @@ export class PinkyLandLevel extends Level {
     if (this.player.gliding && !this._glideSnd) { this._glideSnd = true; this.game.audio.glide(); }
     if (!this.player.gliding) this._glideSnd = false;
   }
+}
+
+Object.assign(PinkyLandLevel.prototype, RideMixin);
+
+// clear, flowing stream water (blue with ripples and a bit of foam where it tips over the falls)
+function makeStreamMaterial() {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uNight: { value: 0 }, uPool: { value: 0 } }]),
+    vertexShader: /* glsl */ `
+      #include <fog_pars_vertex>
+      varying vec2 vUv;
+      void main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;
+      #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      #include <fog_pars_fragment>
+      uniform float uTime; uniform float uNight; uniform float uPool; varying vec2 vUv;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+      float n(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f);
+        return mix(mix(hash(i),hash(i+vec2(1,0)),u.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x), u.y); }
+      void main(){
+        vec2 uv = vUv;
+        float edge, foam, rip;
+        if (uPool > 0.5) {
+          float r = length(uv - 0.5) * 2.0;
+          edge = smoothstep(1.0, 0.8, r);
+          rip = n(vec2(r * 9.0 - uTime * 1.6, atan(uv.y - 0.5, uv.x - 0.5) * 3.0));
+          foam = smoothstep(0.25, 0.0, r) * (0.5 + 0.5 * n(uv * 30.0 + uTime * 2.0)); // bubbling spring
+        } else {
+          edge = smoothstep(0.0, 0.16, uv.x) * smoothstep(1.0, 0.84, uv.x);
+          // ripples travel toward the lip (uv.y = 1)
+          rip = n(vec2(uv.x * 7.0, uv.y * 22.0 - uTime * 3.2)) * 0.6 + n(vec2(uv.x * 15.0 + 3.0, uv.y * 45.0 - uTime * 5.0)) * 0.4;
+          foam = smoothstep(0.9, 1.0, uv.y) * (0.6 + 0.4 * n(vec2(uv.x * 20.0, uv.y * 30.0 - uTime * 6.0)));
+          foam += (1.0 - smoothstep(0.0, 0.2, min(uv.x, 1.0 - uv.x))) * 0.35 * n(vec2(uv.x * 30.0, uv.y * 60.0 - uTime * 4.0));
+        }
+        vec3 deep = vec3(0.12, 0.45, 0.66), shallow = vec3(0.36, 0.74, 0.86);
+        vec3 col = mix(deep, shallow, rip * 0.7 + (1.0 - edge) * 0.4);
+        col += vec3(1.0) * smoothstep(0.72, 0.95, rip) * 0.35;
+        col = mix(col, vec3(0.95, 0.99, 1.0), clamp(foam, 0.0, 1.0));
+        col *= mix(1.0, 0.4, uNight);
+        float a = mix(0.78, 0.95, foam) * edge;
+        gl_FragColor = vec4(col, a);
+        #include <fog_fragment>
+      }`,
+  });
+  mat.uniforms.uTime = sharedUniforms.uTime;
+  return mat;
 }

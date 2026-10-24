@@ -342,32 +342,33 @@ export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}
   const noise = makeNoise2D(seed + 5);
   const group = new THREE.Group();
   const colliders = [];
-  const base = new THREE.Color(color), moss = new THREE.Color('#7fa86a'), dark = base.clone().multiplyScalar(0.72);
-  const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.92, flatShading: true });
-  // solid boulders: shared corners are moved together (so no cracks), with a lumpy,
-  // slightly flattened shape, a darker underside and a little moss on top
+  const base = new THREE.Color(color), moss = new THREE.Color('#7fa86a'), dark = base.clone().multiplyScalar(0.62), light = base.clone().lerp(new THREE.Color('#ffffff'), 0.18);
+  // one solid, smooth, rounded stone per boulder (smooth shading so it never looks like
+  // a pile of separate flat pieces), gently lumpy, flat underneath, darker low down with a little moss on top
+  const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.88, flatShading: false });
   const geos = [0, 1, 2, 3].map((k) => {
-    let g = new THREE.IcosahedronGeometry(1, 2);
+    let g = new THREE.IcosahedronGeometry(1, 4);
     g.deleteAttribute('normal'); g.deleteAttribute('uv');
     g = mergeVertices(g);
     const p = g.attributes.position, v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
-      const n = noise(v.x * 1.3 + k * 7, v.z * 1.3 + v.y * 0.9) * 0.22 + noise(v.x * 3.1 - k, v.y * 3.1 + v.z * 2) * 0.08;
-      const r = 1 + n;
-      v.multiplyScalar(r);
-      v.y *= v.y < 0 ? 0.45 : 0.78; // flat bottom that sits on the ground
-      v.x *= 1.05 + k * 0.04;
+      const n = noise(v.x * 0.9 + k * 7, v.z * 0.9 + v.y * 0.7) * 0.16 + noise(v.x * 2.2 - k, v.y * 2.2 + v.z * 1.6) * 0.05;
+      v.multiplyScalar(1 + n);
+      v.y = v.y < 0 ? v.y * 0.35 : v.y * 0.8; // flat bottom that sits on the ground
+      v.x *= 1.05 + k * 0.05;
       p.setXYZ(i, v.x, v.y, v.z);
     }
-    g = g.toNonIndexed();
     g.computeVertexNormals();
-    const pp = g.attributes.position, nn = g.attributes.normal, col = [];
+    const nn = g.attributes.normal, col = [];
     const c = new THREE.Color();
-    for (let i = 0; i < pp.count; i++) {
-      const y = pp.getY(i), up = nn.getY(i);
-      c.copy(dark).lerp(base, THREE.MathUtils.clamp((y + 0.3) / 0.9, 0, 1));
-      if (up > 0.75 && y > 0.35) c.lerp(moss, 0.45);
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), up = nn.getY(i);
+      c.copy(dark).lerp(base, THREE.MathUtils.clamp((y + 0.25) / 0.7, 0, 1));
+      c.lerp(light, THREE.MathUtils.clamp((y - 0.3) / 0.5, 0, 1) * 0.6);
+      const speck = noise(p.getX(i) * 6 + k, p.getZ(i) * 6 + p.getY(i) * 4) * 0.06;
+      c.offsetHSL(0, 0, speck);
+      if (up > 0.7 && y > 0.4) c.lerp(moss, 0.35 * THREE.MathUtils.clamp((up - 0.7) / 0.25, 0, 1));
       col.push(c.r, c.g, c.b);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -376,16 +377,17 @@ export function createRocks(terrain, spots, { seed = 9, color = '#a9a3b8' } = {}
   for (const s of spots) {
     const m = new THREE.Mesh(geos[Math.floor(rand() * geos.length)], mat);
     const sc = s.scale ?? 0.6 + rand() * 1.2;
-    // sit on the lowest point of the ground under the rock, sunk in a little
+    // sit on the lowest point of the ground under the rock (so it never hangs over a slope), sunk in a little
     let h = Infinity;
-    for (const [dx, dz] of [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]]) h = Math.min(h, terrain.getHeight(s.x + dx * sc, s.z + dz * sc));
+    for (let a = 0; a < 8; a++) h = Math.min(h, terrain.getHeight(s.x + Math.cos(a * 0.785) * sc * 0.9, s.z + Math.sin(a * 0.785) * sc * 0.9));
+    h = Math.min(h, terrain.getHeight(s.x, s.z));
     const sy = sc * (s.flat ? 0.55 : 0.85);
     m.scale.set(sc, sy, sc * (0.85 + rand() * 0.3));
-    m.position.set(s.x, h + sy * 0.12, s.z);
+    m.position.set(s.x, h - sy * 0.05, s.z);
     m.rotation.y = rand() * 6.28;
     m.castShadow = true; m.receiveShadow = true;
     group.add(m);
-    colliders.push({ type: 'cyl', x: s.x, z: s.z, r: sc * 0.9, top: h + sy * 0.12 + sy * 0.72, bottom: h - 2 });
+    colliders.push({ type: 'cyl', x: s.x, z: s.z, r: sc * 0.9, top: h - sy * 0.05 + sy * 0.78, bottom: h - 2 });
   }
   return { group, colliders };
 }

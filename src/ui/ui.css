@@ -209,3 +209,9 @@ button { font-family: var(--round); cursor: pointer; }
     linear-gradient(183deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 6px 34px / 20px 12px no-repeat,
     linear-gradient(178deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 8px 58px / 16px 12px no-repeat,
     linear-gradient(181deg, transparent 46%, #3366cc 47% 55%, transparent 56%) 7px 80px / 15px 10px no-repeat; }
+
+.gu-h3 { margin: 12px 0 8px; font-size: 16px; }
+.gu-times { display: flex; flex-wrap: wrap; gap: 8px; }
+.gu-times .big-btn { min-width: 0; margin: 0; font-size: 14px; padding: 8px 12px; }
+.gu-times .big-btn.picked { outline: 3px solid #ff6fa8; background: #ffe3f0; }
+.gu-note { margin: 6px 0 4px; font-size: 13px; opacity: 0.75; }

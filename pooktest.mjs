@@ -1,7 +1,7 @@
 // Tests Pooking Power: Pinky's third jump in the air (Storybook Chapter 1 and Pinky Land),
 // and that Jacinta (Chapter 3) does not get it. Saves screenshots of the puff.
 import { chromium } from 'playwright-core';
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1100, height: 650 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
 const sbTest = async (chapter, shot) => {

@@ -10,6 +10,7 @@ import { HomeLevel } from './scenes/home.js';
 import { BellyButton } from './world/dragons.js';
 import { EarthLevel } from './scenes/earth.js';
 import { PinkyLandLevel } from './scenes/pinkyland.js';
+import { SnowIslandLevel } from './scenes/snowisland.js';
 import { Kid } from './characters/kid.js';
 import { Pillow } from './characters/pinky.js';
 import { JACINTA, LIEV } from './characters/style.js';
@@ -87,6 +88,7 @@ export class Game {
       if (jump === 'intro') return this.playIntro();
       if (jump === 'storybook') return this.startStorybook(!this.params.get('fresh'), +(this.params.get('chapter') || 1) - 1);
       if (jump === 'earth') this.state.chapter = 'earth';
+      if (jump === 'snow') { this.state.chapter = 'snow'; this.state.pinky = this.state.pinky || { arrived: true, met: [], cape: false, tent: false }; }
       if (jump === 'pinky') { this.state.chapter = 'pinky'; if (this.params.get('arrived')) { this.state.pinky = { arrived: true, met: [], cape: !!this.params.get('cape'), tent: false }; } }
       if (this.params.get('time')) this.state.time = parseFloat(this.params.get('time'));
       if (this.params.get('avatar')) this.state.avatar = this.params.get('avatar');
@@ -221,13 +223,20 @@ export class Game {
       ['pinky-bb', '🧸 Pinky Land — playing as Belly Button'],
       ['pinky-cape', '🦸 Pinky Land — with the Sky Cape'],
       ['pinky-night', '🌙 Pinky Land — at night (campfire time)'],
+      ['snow', '❄️ Snowdrop Island'],
       ['sb-1', '📖 Storybook — Chapter 1'],
       ['sb-2', '📖 Storybook — Chapter 2: The Big House'],
       ['sb-3', '🌴 Storybook — Chapter 3: Jacinta the Explorer'],
     ];
+    const inGame = !titleEl && !!this.level?.dayNight;
+    const times = [[0.26, '🌅 Sunrise'], [0.35, '🌤️ Morning'], [0.5, '☀️ Noon'], [0.62, '🌞 Afternoon'], [0.72, '🌇 Sunset'], [0.8, '🌙 Evening (moonrise)'], [0.9, '🌌 Night'], [0.0, '✨ Midnight']];
     o.innerHTML = `<div class="grownup-panel wide">
       <h2>🔑 Grown-ups menu</h2>
       <label class="gu-test"><input type="checkbox" class="gu-testmode" checked> <b>Test mode</b> — don’t change the saved game (recommended, so your child’s progress stays safe)</label>
+      <h3 class="gu-h3">🕒 Time of day</h3>
+      <div class="gu-times">${times.map(([t, label]) => `<button class="big-btn alt" data-time="${t}">${label}</button>`).join('')}</div>
+      <p class="gu-note">${inGame ? 'Changes the time right now.' : 'Pick a time first, then pick a place below.'}</p>
+      <h3 class="gu-h3">🧭 Jump to</h3>
       <div class="gu-grid">${jumps.map(([k, label]) => `<button class="big-btn alt" data-jump="${k}">${label}</button>`).join('')}</div>
       <details class="gu-pwchange"><summary>Change the password</summary>
         <input type="text" class="gu-newpw" placeholder="New password" autocomplete="off"> <button class="big-btn alt gu-savepw" style="min-width:0">Save</button> <span class="gu-pwmsg"></span>
@@ -243,6 +252,19 @@ export class Game {
       try { localStorage.setItem('pinky-land-grownup-pw', v); } catch (e) { /* ignore */ }
       o.querySelector('.gu-pwmsg').textContent = '✓ Saved';
     });
+    o.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => {
+      this.audio.click();
+      const t = parseFloat(b.dataset.time);
+      if (inGame) {
+        this.level.dayNight.setTime(t);
+        o.remove();
+        this.ui.close();
+        this.ui.toast('🕒', b.textContent);
+        return;
+      }
+      this.pendingTime = t;
+      o.querySelectorAll('[data-time]').forEach((x) => x.classList.toggle('picked', x === b));
+    }));
     o.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => {
       this.audio.click();
       const test = o.querySelector('.gu-testmode').checked;
@@ -253,6 +275,14 @@ export class Game {
   }
 
   adminJump(where, test = true) {
+    const pt = this.pendingTime;
+    this.pendingTime = undefined;
+    const r = this._adminJump(where, test);
+    if (pt !== undefined) { this.state.time = pt; this.forceTime = pt; }
+    return r;
+  }
+
+  _adminJump(where, test = true) {
     this.testMode = test;
     if (test) this.showTestBadge();
     if (where === 'sb-1' || where === 'sb-2' || where === 'sb-3') { this.startStorybook(false, +where.slice(3) - 1); return; }
@@ -269,7 +299,7 @@ export class Game {
     st.avatar = where === 'pinky-bb' ? 'bellybutton' : 'jacinta';
     this.forceTime = where === 'pinky-night' ? 0.86 : 0.33;
     st.time = this.forceTime;
-    return this.loadLevel('pinky');
+    return this.loadLevel(where === 'snow' ? 'snow' : 'pinky');
   }
 
   showTestBadge() {
@@ -321,11 +351,12 @@ export class Game {
       this.followerCache.clear();
     }
     this.state.chapter = name;
-    const level = name === 'pinky' ? new PinkyLandLevel(this) : name === 'home' ? new HomeLevel(this) : new EarthLevel(this);
+    const level = name === 'pinky' ? new PinkyLandLevel(this) : name === 'snow' ? new SnowIslandLevel(this) : name === 'home' ? new HomeLevel(this) : new EarthLevel(this);
+    if (this.arriveAt) { level.arriveAt = this.arriveAt; this.arriveAt = null; }
     await level.build();
     this.level = level;
     this.engine.setScene(level.scene);
-    if (!level.availableAvatars().includes(this.state.avatar)) this.state.avatar = name === 'pinky' ? 'jacinta' : 'jacintaPack';
+    if (!level.availableAvatars().includes(this.state.avatar)) this.state.avatar = name === 'pinky' || name === 'snow' ? 'jacinta' : 'jacintaPack';
     this.applyParty(true);
     this.mode = name;
     this.ui.showHUD(true);
@@ -337,7 +368,7 @@ export class Game {
     level.rig.snap(level.player.pos.clone().add(new THREE.Vector3(0, 1, 0)));
     this.ui.fade(false);
     this.saveGame();
-    if (name === 'pinky') level.arrive();
+    if (name === 'pinky' || name === 'snow') level.arrive();
   }
 
   // Jacinta's house: go in through the front door, come back out onto the walk
@@ -357,6 +388,23 @@ export class Game {
     this.ui.say('Hold on tight, Jacinta! Here we gooo!', 3);
     this.state.avatar = 'jacinta';
     this.forceTime = 0.33; // Pinky Land always starts on a bright morning
+    await this.loadLevel('pinky');
+  }
+
+  // the little ferry between Pinky Land and Snowdrop Island
+  async goToSnowIsland() {
+    this.audio.portal?.();
+    this.ui.say('All aboard! Next stop: Snowdrop Island! ❄️', 3);
+    await this.loadLevel('snow');
+  }
+
+  async leaveSnowIsland() {
+    this.audio.portal?.();
+    this.ui.say('Sailing home to Pinky Land! 🌸', 3);
+    const L = this.level;
+    if (L?.riding) L.endRide();
+    this.state.lastPos = null;
+    this.arriveAt = { ferry: true };
     await this.loadLevel('pinky');
   }
 
@@ -404,8 +452,8 @@ export class Game {
     const avail = L.availableAvatars();
     const lievJoined = (L.name !== 'earth' && L.name !== 'home') || this.state.earth?.liev;
     if (!avail.includes(key) || (key === 'liev' && !lievJoined)) {
-      if (key === 'pinky' && L.name !== 'pinky') this.ui.say('On Earth I’m just a regular pillow… but in Pinky Land I can walk on my own!', 5);
-      else if (key === 'jacinta' && L.name !== 'pinky') this.ui.say('I’d rather stay in your backpack here on Earth. Hugs!', 4);
+      if (key === 'pinky' && L.name !== 'pinky' && L.name !== 'snow') this.ui.say('On Earth I’m just a regular pillow… but in Pinky Land I can walk on my own!', 5);
+      else if (key === 'jacinta' && L.name !== 'pinky' && L.name !== 'snow') this.ui.say('I’d rather stay in your backpack here on Earth. Hugs!', 4);
       else if (key === 'liev') this.ui.say('Let’s find Liev first! He’s by the park entrance.', 4);
       return;
     }
@@ -456,7 +504,7 @@ export class Game {
     if (this.ui.dialogueActive) return;
     if (act === 'hint') return this.showHint();
     if (act === 'journal') return this.ui.openJournal(this.state);
-    if (act === 'map') return this.ui.openMap((c) => L.drawMap(c), L.name === 'home' ? '🛋️ Living room · 🍳 Kitchen · 🛏️ Jacinta’s room · 🛁 Bathroom · 🚪 Front door' : L.name === 'earth' ? '🏠 Houses · 🛝 Playground · 🌀 Magic door · ⛑️ Park helper · 🗑️ Trash bin' : '🌀 Dream Door · 🔥 Camp · 💧 Pond · 🌈 Falls · ☁️ Cloud steps · 🪸 Reef · 🩷 Pinky friends');
+    if (act === 'map') return this.ui.openMap((c) => L.drawMap(c), L.name === 'home' ? '🛋️ Living room · 🍳 Kitchen · 🛏️ Jacinta’s room · 🛁 Bathroom · 🚪 Front door' : L.name === 'earth' ? '🏠 Houses · 🛝 Playground · 🌀 Magic door · ⛑️ Park helper · 🗑️ Trash bin' : L.name === 'snow' ? '⛵ Ferry · 🛷 Sled hills · 🏠 Big Igloo · 🐧 Frozen Pond · ♨️ Hot Spring · ☕ Cocoa · ❄️ Frost' : '🌀 Dream Door · 🔥 Camp · 💧 Pond · 🌈 Falls · ☁️ Cloud steps · 🪸 Reef · ⛵ Ferry · 🩷 Pinky friends');
     if (act === 'chars') {
       const lievJoined = (L.name !== 'earth' && L.name !== 'home') || this.state.earth?.liev;
       return this.ui.openCharacters(L.availableAvatars().filter((k) => k !== 'liev' || lievJoined), this.state.avatar, ALL_AVATARS);
@@ -571,7 +619,7 @@ export class Game {
       this.input.poll();
       if (this.intro) this.intro.update(dt);
       if (this.storybook && this.mode === 'storybook') this.storybook.update(dt);
-      if (this.level && (this.mode === 'earth' || this.mode === 'pinky' || this.mode === 'home')) {
+      if (this.level && (this.mode === 'earth' || this.mode === 'pinky' || this.mode === 'home' || this.mode === 'snow')) {
         this.handleKeys();
         this.level.update(dt);
         if (!this.params.get('norender')) this.engine.render();

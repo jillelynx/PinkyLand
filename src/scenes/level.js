@@ -698,5 +698,5 @@ export class Level {
 }
 
 export function iconFor(kind) {
-  return { star: '⭐', shell: '🐚', feather: '🪶', seaglass: '💎', flower: '🌸', heart: '💗', cape: '🦸', bandage: '🩹', litter: '🗑️' }[kind] || '✨';
+  return { star: '⭐', shell: '🐚', feather: '🪶', seaglass: '💎', flower: '🌸', heart: '💗', cape: '🦸', bandage: '🩹', litter: '🗑️', snowflake: '❄️' }[kind] || '✨';
 }
