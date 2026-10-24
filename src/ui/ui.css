@@ -215,3 +215,11 @@ button { font-family: var(--round); cursor: pointer; }
 .gu-times .big-btn { min-width: 0; margin: 0; font-size: 14px; padding: 8px 12px; }
 .gu-times .big-btn.picked { outline: 3px solid #ff6fa8; background: #ffe3f0; }
 .gu-note { margin: 6px 0 4px; font-size: 13px; opacity: 0.75; }
+
+/* stargazing: a smaller, darker, see-through word box */
+.dialogue.stargaze { width: min(600px, 88vw); bottom: 16px; padding: 18px 22px 14px; border-radius: 20px; background: rgba(14, 16, 38, 0.72); border: 2px solid rgba(255, 255, 255, 0.18); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); color: #e9e6ff; backdrop-filter: blur(2px); }
+.dialogue.stargaze .name { font-size: 15px; padding: 4px 14px; top: -16px; opacity: 0.9; }
+.dialogue.stargaze .text { font-size: 17px; min-height: 44px; color: #e9e6ff; }
+.dialogue.stargaze .choices button { font-size: 15px; padding: 8px 14px; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.18); color: #f1eeff; }
+.dialogue.stargaze .choices button:hover, .dialogue.stargaze .choices button.sel { background: rgba(255, 140, 190, 0.25); border-color: var(--pink); }
+.dialogue.stargaze .next { color: #a9a3d0; font-size: 12px; }

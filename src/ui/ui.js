@@ -125,6 +125,9 @@ export class UI {
     });
   }
 
+  // a smaller, darker word box while looking at the stars, so it doesn't hide the sky
+  setStargaze(on) { this.dlg.classList.toggle('stargaze', !!on); }
+
   setCounter(html) { this.counterEl.innerHTML = html; }
 
   setClock(night, hours) {

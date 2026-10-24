@@ -413,10 +413,10 @@ export class PinkyLandLevel extends Level {
   // northern lights off to the left
   cliffView() {
     const D = CLIFF_DIR, h = this.terrain.getHeight(CLIFF.x, CLIFF.z);
-    const eye = new THREE.Vector3(CLIFF.x - D.x * 4.2 - D.z * 1.6, h + 3.3, CLIFF.z - D.z * 4.2 + D.x * 1.6);
+    const eye = new THREE.Vector3(CLIFF.x + D.x * 3.2, h + 3.4, CLIFF.z + D.z * 3.2); // in front of the fire, everyone sitting behind the camera
     // look a little to the right of straight out (toward the moon), down at the sea and up at the sky
     const a = Math.atan2(D.x, -D.z) + 0.1;
-    const look = new THREE.Vector3(eye.x + Math.sin(a) * 60, h + 1, eye.z - Math.cos(a) * 60);
+    const look = new THREE.Vector3(eye.x + Math.sin(a) * 60, h + 4.5, eye.z - Math.cos(a) * 60);
     return [eye, look];
   }
 
@@ -442,6 +442,7 @@ export class PinkyLandLevel extends Level {
     let done = false;
     while (!done) {
       const night = this.dayNight.nightAmount > 0.6;
+      g.ui.setStargaze(night);
       const choices = night
         ? [{ text: 'Watch the moon and the northern lights 🌙', value: 'watch' }, { text: 'Sleep until morning 🌅', value: 'sleep' }, { text: 'Get up and keep exploring', value: 'up' }]
         : [{ text: 'Wait here until night falls 🌌', value: 'night' }, { text: 'Get up and keep exploring', value: 'up' }];
@@ -453,6 +454,7 @@ export class PinkyLandLevel extends Level {
         await new Promise((r) => setTimeout(r, 600));
         g.ui.fade(false);
         await new Promise((r) => setTimeout(r, 900));
+        g.ui.setStargaze(c !== 'sleep');
         if (c === 'sleep') { await g.ui.dialogue([line(PINKY, 'Good morning! The sea is all sparkly with sunshine now. ☀️')]); done = true; }
         else await g.ui.dialogue([line(J, 'Whoa… the moon is coming up out of the sea!'), line(L, 'And look over there — green and pink lights, dancing! Those are the northern lights.'), line(PINKY, 'And they’re reflected in the water, all wobbly and shimmery. 🩷')]);
         this.journalCheck('moonview', 'Moonview Cliff');
@@ -471,6 +473,7 @@ export class PinkyLandLevel extends Level {
     this.followers.forEach((f) => { f.model.anim.sit = false; f.frozen = false; });
     this.player.frozen = false;
     this.player.pos.x -= D.x * 1.2; this.player.pos.z -= D.z * 1.2;
+    g.ui.setStargaze(false);
     this.sitting = false;
   }
 
@@ -886,11 +889,13 @@ export class PinkyLandLevel extends Level {
         done = true;
       } else if (c === 'stars') {
         this.rig.setOverride(new THREE.Vector3(CAMP.x, campH + 1.5, CAMP.z + 3), new THREE.Vector3(CAMP.x - 10, campH + 30, CAMP.z - 30));
+        g.ui.setStargaze(true);
         await g.ui.dialogue([
           line(J, 'Look! That group of stars looks like a pillow with a smiley face!'),
           line(PINKY, 'That’s the Pinky constellation! I think you put it there when you were little.'),
           line(L, 'And that one looks like a soccer ball. Totally.'),
         ]);
+        g.ui.setStargaze(false);
         this.rig.setOverride(new THREE.Vector3(CAMP.x + 0.5, campH + 2.2, CAMP.z + 6.5), new THREE.Vector3(CAMP.x, campH + 0.8, CAMP.z));
       } else done = true;
     }
