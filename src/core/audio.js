@@ -518,6 +518,33 @@ export class AudioEngine {
     this.crackle(0.6);
   }
 
+  // Pooking Power: a short, silly cartoon toot (a wobbly low buzz that bends upward at the end)
+  pook() {
+    if (!this.started) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.linearRampToValueAtTime(70, t + 0.22);
+    o.frequency.linearRampToValueAtTime(140, t + 0.34);
+    // flutter
+    const lfo = c.createOscillator(); lfo.frequency.value = 32;
+    const lg = c.createGain(); lg.gain.value = 22;
+    lfo.connect(lg).connect(o.frequency);
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 650; f.Q.value = 4;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.22, t + 0.02);
+    g.gain.setValueAtTime(0.2, t + 0.25); g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+    o.connect(f).connect(g).connect(this.sfxGain);
+    o.start(t); lfo.start(t); o.stop(t + 0.4); lfo.stop(t + 0.4);
+    // a little airy puff on top
+    const n = this._noiseSource(false);
+    const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 500;
+    const ng = c.createGain(); ng.gain.setValueAtTime(0.05, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    n.connect(nf).connect(ng).connect(this.sfxGain); n.start(t); n.stop(t + 0.32);
+    // and a giggle-y 'boing' after
+    this._tone(660, t + 0.36, { dur: 0.18, vol: 0.05, slide: 1.6, type: 'triangle' });
+  }
+
   glide() {
     if (!this.started) return;
     const c = this.ctx, t = c.currentTime;

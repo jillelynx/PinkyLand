@@ -6,6 +6,7 @@ import { Pillow } from '../characters/pinky.js';
 import { createCollectible, animateCollectible, glowTexture } from '../world/props.js';
 import { sharedUniforms } from '../world/terrain.js';
 import { drawThought } from './pinkySprite.js';
+import { PookPuffs } from '../world/pookPuff.js';
 import { rng } from './paint.js';
 import {
   S, toX, toY, DEPTH, makeGround, makeBlock, makeOneway, makeMover, makeBouncy, makeWater, makeThorns,
@@ -24,7 +25,7 @@ export const LEVELS = [LEVEL1, LEVEL2, LEVEL3];
 const PH = {
   gravity: 2150, jump: 800, jumpCut: 0.45, walk: 230, run: 345, accel: 2600, airAccel: 1700, decel: 3000,
   maxFall: 950, coyote: 0.1, buffer: 0.13, w: 32, h: 49, bunnyBounce: 640, bunnyBounceHeld: 880,
-  doubleJump: 690, stepUp: 34,
+  doubleJump: 690, stepUp: 34, pook: 600,
 };
 
 const SCRAP_NAMES = { hair: 'curly brown hair and two bright eyes', hoodie: 'a pink hoodie, blue shorts and white sneakers', smile: 'a gentle smile… and a little pink pillow, hugged tight' };
@@ -305,6 +306,7 @@ export class Storybook {
     this.swirl.geometry.setDrawRange(0, 0);
     scene.add(this.swirl);
     this.particles = [];
+    this.pookFx = new PookPuffs(scene);
 
     this.engine.setScene(scene);
     this.engine.camera.fov = 38;
@@ -479,9 +481,21 @@ export class Storybook {
       p.spin = 1; // a happy twirl
       this.audio.jump(2);
       this.burst(p.x, p.y - 10, '#ffe27a', 10);
+      if (!L.hero && !this._pookHint && !this._pookTip) { this._pookHint = true; setTimeout(() => { if (!this._pookTip) this.tip('Psst… press jump ONE more time for Pooking Power! 💨', 3.5); }, 900); }
       this.pinky.land(0.3);
     }
-    if (p.grounded) p.doubled = false;
+    // Pooking Power (Pinky only): press jump a third time in the air for a toot boost
+    if (!L.hero && p.buffer > 0 && !p.grounded && p.doubled && !p.pooked) {
+      p.vy = Math.min(p.vy, -this.ph.pook);
+      p.pooked = true; p.buffer = 0;
+      this.audio.pook();
+      this.pookFx?.emit(new THREE.Vector3(toX(p.x - p.facing * 8), toY(p.y - 8), 0.2), 0.8, new THREE.Vector3(-p.facing * 0.8, -1, 0));
+      this.pinky.setMood('oops');
+      clearTimeout(this._pookT); this._pookT = setTimeout(() => this.pinky.setMood('happy'), 1000);
+      this.pinky.land(0.35);
+      if (!this._pookTip) { this._pookTip = true; this.tip('POOKING POWER! 💨 Hee hee… excuse me!', 2.4); }
+    }
+    if (p.grounded) { p.doubled = false; p.pooked = false; }
     if (!jumpHeld && p.vy < -200) p.vy *= Math.pow(this.ph.jumpCut, dt * 10); // let go early = smaller hop
     p.vy = Math.min(this.ph.maxFall, p.vy + this.ph.gravity * dt * (p.vy > 0 ? 1.15 : 1));
 
@@ -934,13 +948,14 @@ export class Storybook {
         <button class="big-btn alt" data-act="checkpoint">Go back to the last checkpoint</button>
         <button class="big-btn alt" data-act="restart">Restart this chapter</button>
         <button class="big-btn alt" data-act="title">🏠 Main menu (progress is saved)</button>
-        <p style="font-size:14px;color:#8a6a9a">← → walk · Shift run · Space jump (hold for higher) · Space again in the air = double jump${this.level.moves ? ' · ↓ duck (↓ + arrows to crawl) · ↓ while moving = slide · Z punch · X kick' : ''} · R checkpoint</p>`);
+        <p style="font-size:14px;color:#8a6a9a">← → walk · Shift run · Space jump (hold for higher) · Space again in the air = double jump${!this.level.hero ? ' · Space a 3rd time = Pooking Power 💨' : ''}${this.level.moves ? ' · ↓ duck (↓ + arrows to crawl) · ↓ while moving = slide · Z punch · X kick' : ''} · R checkpoint</p>`);
     } else this.overlay.classList.add('hidden');
   }
 
   // ---------------- world animation ----------------
   updateWorld(dt) {
     const L = this.level;
+    this.pookFx?.update(dt);
     for (const s of this.starObjs) if (s) animateCollectible(s, dt);
     for (const g of this.scrapObjs) if (g) { g.userData.t += dt; g.userData.paper.rotation.y = Math.sin(g.userData.t * 1.5) * 0.5; g.position.y += Math.sin(g.userData.t * 2) * 0.002; }
     for (const b of this.bunnies) {

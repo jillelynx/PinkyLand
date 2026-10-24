@@ -1,5 +1,6 @@
 // Shared parts of every place you can visit (Earth and Pinky Land).
 import * as THREE from 'three';
+import { PookPuffs } from '../world/pookPuff.js';
 import { DayNight } from '../world/sky.js';
 import { sharedUniforms } from '../world/terrain.js';
 import { playerUniform } from '../world/vegetation.js';
@@ -57,6 +58,16 @@ export class Level {
     this.player.teleport(spawn.x, this.world.groundHeight(spawn.x, spawn.z) + 0.1, spawn.z, yaw);
     this.rig.yaw = yaw + Math.PI;
     this.player.events.jump = (n) => g.audio.jump(n);
+    // Pooking Power: Pinky's toot boost
+    this.pookFx = this.pookFx || new PookPuffs(this.scene);
+    this.player.events.pook = () => {
+      g.audio.pook();
+      const P = this.player;
+      this.pookFx.emit(P.pos.clone().add(new THREE.Vector3(0, 0.15, 0)), 1, new THREE.Vector3(-Math.sin(P.yaw) * 0.6, -1, -Math.cos(P.yaw) * 0.6));
+      P.model.setMood?.('oops');
+      clearTimeout(this._pookT); this._pookT = setTimeout(() => P.model.setMood?.('happy'), 1100);
+      if (!this._pookTold) { this._pookTold = true; g.ui.say('Pooking Power! 💨 Hee hee… excuse me!', 2.5); }
+    };
     this.player.events.bounce = () => g.audio.bounce();
     this.player.events.splash = (k) => g.audio.splash(k);
     this._edgeT = -99;
@@ -272,6 +283,7 @@ export class Level {
   baseUpdate(dt) {
     const g = this.game;
     this.time += dt;
+    this.pookFx?.update(dt);
     const p = this.player;
     const busy = g.ui.isBusy() || this.cutscene;
     p.frozen = busy;

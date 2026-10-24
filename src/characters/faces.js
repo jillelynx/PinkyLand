@@ -176,6 +176,11 @@ function pinkyRealFace({ mood, blink, ink, plain }) {
   // the face, small and high up
   const fx = 252, ey = 148;
   const eye = (x, y, tilt) => {
+    if (mood === 'oops') {
+      g.strokeStyle = ink; g.lineWidth = 9;
+      g.beginPath(); g.moveTo(x - 20, y + 8); g.quadraticCurveTo(x, y - 14, x + 20, y + 8); g.stroke();
+      return;
+    }
     if (blink) {
       g.strokeStyle = ink; g.lineWidth = 9;
       g.beginPath(); g.moveTo(x - 20, y + 2); g.quadraticCurveTo(x, y + 16, x + 20, y + 2); g.stroke();
@@ -191,6 +196,13 @@ function pinkyRealFace({ mood, blink, ink, plain }) {
   };
   eye(fx - 46, ey, -0.35);
   eye(fx + 46, ey - 2, 0.25);
+  if (mood === 'oops') {
+    g.fillStyle = 'rgba(255,110,140,0.45)';
+    g.beginPath(); g.ellipse(fx - 78, 196, 24, 14, 0, 0, Math.PI * 2); g.ellipse(fx + 78, 196, 24, 14, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = ink; g.lineWidth = 9;
+    g.beginPath(); g.ellipse(fx, 200, 11, 13, 0, 0, Math.PI * 2); g.stroke();
+    const t = tex(c); cache.set(key, t); return t;
+  }
   g.strokeStyle = ink; g.lineWidth = 10;
   g.beginPath();
   if (mood === 'sad') {

@@ -10,7 +10,7 @@ export const AVATAR_STATS = {
   jacinta: { walk: 3.6, run: 6.6, jump: 8.6, gravity: 24, radius: 0.32, height: 1.3, eye: 1.05, swimDepth: 0.95 },
   jacintaPack: { walk: 3.5, run: 6.4, jump: 8.4, gravity: 24, radius: 0.34, height: 1.3, eye: 1.05, swimDepth: 0.95 },
   liev: { walk: 3.8, run: 7.4, jump: 9.0, gravity: 24, radius: 0.32, height: 1.4, eye: 1.12, swimDepth: 1.0 },
-  pinky: { walk: 3.2, run: 5.8, jump: 9.6, gravity: 17, radius: 0.36, height: 0.9, eye: 0.62, swimDepth: 0.4, floaty: true },
+  pinky: { walk: 3.2, run: 5.8, jump: 9.6, gravity: 17, radius: 0.36, height: 0.9, eye: 0.62, swimDepth: 0.4, floaty: true, pook: true },
   // Belly Button: a soft plush bear — a little slower, but big drops make him belly-bounce, and he floats on his back
   bellybutton: { walk: 3.1, run: 5.6, jump: 8.4, gravity: 22, radius: 0.34, height: 1.15, eye: 0.9, swimDepth: 0.5, bellyBounce: true },
 };
@@ -195,6 +195,11 @@ export class Player {
         this.vel.y = st.jump * 0.92;
         this.jumpBuffer = 0; this.jumpsUsed = 2;
         this.events.jump?.(2);
+      } else if (st.pook && this.jumpsUsed === 2) {
+        // Pooking Power! one silly toot for an extra boost
+        this.vel.y = Math.max(this.vel.y, st.jump * 0.78);
+        this.jumpBuffer = 0; this.jumpsUsed = 3;
+        this.events.pook?.();
         this.model.land?.(0.2);
       }
     }
