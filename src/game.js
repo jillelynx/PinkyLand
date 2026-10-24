@@ -22,6 +22,7 @@ import { Storybook, storybookHasSave, LEVELS } from './storybook/storybook.js';
 
 const SAVE_KEY = 'pinky-land-save-v1';
 const ALL_AVATARS = ['jacintaPack', 'jacinta', 'pinky', 'liev', 'bellybutton'];
+const GROWNUP_CODE = '0f0119db'; // scrambled code of the grown-ups password (the password itself is not in the game files)
 
 function freshState() {
   return {
@@ -186,8 +187,22 @@ export class Game {
 
   // ---------------- Grown-ups menu: jump to any part of the game ----------------
   // A simple password keeps little players out. (It's a kid lock, not real security.)
-  grownUpPassword() {
-    try { return localStorage.getItem('pinky-land-grownup-pw') || 'pinky79'; } catch (e) { return 'pinky79'; }
+  // The grown-ups password is never stored as plain text: only a scrambled code of it
+  // (so it can't be read in the game's files). A changed password is kept the same way.
+  scramblePw(text) {
+    let h = 0x811c9dc5;
+    const t = 'pinky-land:' + String(text).trim().toLowerCase();
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    for (let r = 0; r < 2000; r++) { h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15; }
+    return h.toString(16).padStart(8, '0');
+  }
+
+  grownUpCode() {
+    try {
+      const old = localStorage.getItem('pinky-land-grownup-pw'); // older versions saved it as plain text
+      if (old) { localStorage.setItem('pinky-land-grownup-code', this.scramblePw(old)); localStorage.removeItem('pinky-land-grownup-pw'); }
+      return localStorage.getItem('pinky-land-grownup-code') || GROWNUP_CODE;
+    } catch (e) { return GROWNUP_CODE; }
   }
 
   openGrownUp(titleEl) {
@@ -204,7 +219,7 @@ export class Game {
     const pw = o.querySelector('.gu-pw');
     setTimeout(() => pw.focus(), 50);
     const tryOpen = () => {
-      if (pw.value.trim().toLowerCase() === this.grownUpPassword().toLowerCase()) { o.remove(); this.showGrownUpMenu(titleEl); }
+      if (this.scramblePw(pw.value) === this.grownUpCode()) { o.remove(); this.showGrownUpMenu(titleEl); }
       else { o.querySelector('.gu-msg').textContent = 'That’s not it. Try again.'; pw.value = ''; pw.focus(); }
     };
     pw.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') tryOpen(); if (e.key === 'Escape') o.remove(); });
@@ -249,7 +264,7 @@ export class Game {
     o.querySelector('.gu-savepw').addEventListener('click', () => {
       const v = o.querySelector('.gu-newpw').value.trim();
       if (v.length < 3) { o.querySelector('.gu-pwmsg').textContent = 'Use at least 3 letters.'; return; }
-      try { localStorage.setItem('pinky-land-grownup-pw', v); } catch (e) { /* ignore */ }
+      try { localStorage.setItem('pinky-land-grownup-code', this.scramblePw(v)); } catch (e) { /* ignore */ }
       o.querySelector('.gu-pwmsg').textContent = '✓ Saved';
     });
     o.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => {
@@ -538,6 +553,12 @@ export class Game {
 
   setVolume(kind, v) { this.settings[kind] = v; this.audio.setVolume(kind, v); this.saveGame(); }
   setQuality(q) { this.settings.quality = q; this.engine.setQuality(q); this.saveGame(); }
+  setTimeSpeed(v) {
+    this.settings.timeSpeed = v;
+    if (this.level?.dayNight) this.level.dayNight.speed = v;
+    this.saveGame();
+  }
+
   setSensitivity(s) { this.settings.sensitivity = s; if (this.level) this.level.rig.sensitivity = s; this.saveGame(); }
 
   // ---------------- Saving ----------------
@@ -602,6 +623,14 @@ export class Game {
     const hit = (...c) => c.some((k) => inp.pressed.has(k));
     if (hit('KeyH', 'Pad_hint')) { if (!this.ui.open) this.uiAction('hint'); }
     if (hit('KeyF') && !this.ui.open) this.toggleFlashlight();
+    // hold T to fast-forward time (a time-lapse of the sky); let go to go back to normal
+    const dn = this.level?.dayNight;
+    if (dn) {
+      const ff = inp.keys?.has('KeyT') && !this.ui.open;
+      dn.speed = ff ? 60 : this.settings.timeSpeed || 1;
+      if (ff && !this._ffOn) this.ui.toast('⏩', 'Fast-forwarding time… let go of T to stop');
+      this._ffOn = ff;
+    }
     if (hit('KeyJ', 'Pad_journal')) this.uiAction('journal');
     if (hit('KeyM', 'Pad_map')) this.uiAction('map');
     if (this.ui.open) return;

@@ -41,6 +41,7 @@ export class Level {
 
   setupSky(startTime) {
     this.dayNight = new DayNight(this.scene, { startTime });
+    this.dayNight.speed = this.game.settings.timeSpeed || 1;
     const q = this.game.engine.q;
     this.dayNight.sun.castShadow = q.shadows;
     this.dayNight.sun.shadow.mapSize.set(q.shadowSize, q.shadowSize);

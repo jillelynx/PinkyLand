@@ -397,6 +397,7 @@ export class UI {
         <label>Graphics quality <select data-q><option value="high">High (best for Mac M4)</option><option value="medium">Medium</option><option value="low">Low (fastest)</option></select></label>
         <label>Camera turning speed <input type="range" min="0.002" max="0.012" step="0.0005" data-sens value="${s.sensitivity}"></label>
         <label>Look around by just moving the mouse<br><small style="font-weight:400;color:#8a6a9a">Click the game to start; press Esc to get the mouse back</small> <input type="checkbox" data-ml ${s.mouseLook ? 'checked' : ''}></label>
+        <label>How fast the day goes by <select data-ts><option value="1">🐢 Normal (a whole day takes about 15 minutes)</option><option value="3">🐇 Fast (3× faster)</option><option value="10">🚀 Super fast (10× faster)</option><option value="30">⚡ Zoom (30× faster)</option></select></label>
         <label>Show controls help <input type="checkbox" data-ctl ${s.hideControls ? '' : 'checked'}></label>
       </div>
       <h2 style="font-size:26px;margin-top:18px">Controls</h2>
@@ -412,6 +413,7 @@ export class UI {
         <b>Talk / pick up</b><span>E</span>
         <b>Switch character</b><span>Tab, or 1 2 3 4</span>
         <b>Hint · Journal · Map</b><span>H · J · M</span>
+        <b>Fast-forward the sky</b><span>Hold T to make time zoom by (watch the sun set or the stars come out!)</span>
       </div>
       <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
         <button class="big-btn" data-resume style="min-width:0;font-size:16px">Back to playing</button>
@@ -422,6 +424,8 @@ export class UI {
       </div>`, 'settings');
     this.panel.querySelector('[data-grownup]').addEventListener('click', () => this.game.openGrownUp(null));
     this.panel.querySelector('[data-q]').value = s.quality;
+    this.panel.querySelector('[data-ts]').value = String(s.timeSpeed || 1);
+    this.panel.querySelector('[data-ts]').addEventListener('change', (e) => this.game.setTimeSpeed(parseFloat(e.target.value)));
     this.panel.querySelectorAll('[data-vol]').forEach((r) => r.addEventListener('input', () => this.game.setVolume(r.dataset.vol, parseFloat(r.value))));
     this.panel.querySelector('[data-q]').addEventListener('change', (e) => this.game.setQuality(e.target.value));
     this.panel.querySelector('[data-sens]').addEventListener('input', (e) => this.game.setSensitivity(parseFloat(e.target.value)));

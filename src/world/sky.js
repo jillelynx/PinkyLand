@@ -218,7 +218,8 @@ export class DayNight {
 
   update(dt, focus, underwater = false) {
     // nights pass more than twice as fast as days, so it's mostly daytime
-    if (!this.paused) this.time = (this.time + (dt / this.dayLength) * (this.nightAmount > 0.5 ? 2.4 : 1)) % 1;
+    // speed: 1 = normal; bigger numbers make the sun and moon move faster (fast-forward)
+    if (!this.paused) this.time = (this.time + (dt * (this.speed || 1) / this.dayLength) * (this.nightAmount > 0.5 ? 2.4 : 1)) % 1;
     this.uniforms.uTime.value += dt;
 
     // Directions: north = -z (top of the map), east = +x, south = +z, west = -x.

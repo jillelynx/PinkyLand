@@ -9,7 +9,7 @@ await page.waitForTimeout(9000);
 await page.evaluate(() => window.__game.uiAction('settings'));
 await page.waitForTimeout(300);
 await page.click('[data-grownup]');
-await page.fill('.gu-pw', 'pinky79'); await page.click('.gu-ok');
+await page.fill('.gu-pw', process.env.PL_PW || ''); await page.click('.gu-ok');
 await page.waitForTimeout(300);
 await page.click('[data-time="0.9"]');
 await page.waitForTimeout(500);
