@@ -400,10 +400,24 @@ export class Game {
 
   async goToPinkyLand() {
     this.audio.portal();
-    this.ui.say('Hold on tight, Jacinta! Here we gooo!', 3);
+    const first = !this.state.pinky?.arrived;
+    this.ui.say(first ? 'Hold on tight, Jacinta! Here we gooo!' : 'Back to Pinky Land! Wheee! 🌸', 3);
     this.state.avatar = 'jacinta';
-    this.forceTime = 0.33; // Pinky Land always starts on a bright morning
+    if (first) this.forceTime = 0.33; // the very first visit starts on a bright morning
+    this.arriveAt = { door: true }; // come out at the Dream Door
     await this.loadLevel('pinky');
+  }
+
+  // Through the Dream Door from Pinky Land back to Earth: to Jacinta's room, or out by the
+  // Wishing Tree in the park. Everything you've done in both worlds is kept.
+  async returnFromPinkyLand(where = 'home') {
+    const L = this.level;
+    if (L?.riding) L.endRide?.();
+    this.audio.portal();
+    this.ui.say(where === 'home' ? 'Home sweet home! 🏠' : 'Back to the park! 🌳', 3);
+    this.state.avatar = 'jacintaPack'; // on Earth, Pinky rides in Jacinta's backpack again
+    if (where === 'home') { this.state.homeSpawn = { x: -2.6, z: -2.4 }; await this.loadLevel('home'); }
+    else { this.arriveAt = { portal: true }; await this.loadLevel('earth'); }
   }
 
   // the little ferry between Pinky Land and Snowdrop Island

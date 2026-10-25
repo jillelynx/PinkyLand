@@ -209,12 +209,12 @@ export class EarthLevel extends Level {
     // ---- portal at the wishing tree
     const pz = 38;
     this.portal = new Portal(this.scene, new THREE.Vector3(0, this.terrain.getHeight(0, pz), pz), Math.PI);
-    this.portal.setHearts(this.E.hearts.length);
+    this.portal.setHearts(this.doorOpen() ? Math.max(5, this.E.hearts.length) : this.E.hearts.length);
     this.updaters.push((dt) => this.portal.update(dt));
     this.landmarks.push({ x: 0, z: pz, icon: '🌀', label: 'Wishing Tree Door', always: true });
     this.addInteractable({
       pos: new THREE.Vector3(0, this.terrain.getHeight(0, pz), pz), radius: 3,
-      label: () => (this.E.hearts.length >= 5 ? 'Step through the door to Pinky Land!' : 'Look at the magic door'),
+      label: () => (this.doorOpen() ? 'Step through the door to Pinky Land!' : 'Look at the magic door'),
       action: () => this.portalAction(),
     });
 
@@ -224,7 +224,9 @@ export class EarthLevel extends Level {
     this.creatures.addButterflies({ center: { x: 0, z: 18 }, radius: 25, count: 10, getHeight: (x, z) => this.terrain.getHeight(x, z) });
 
     // ---- player, Liev, Pinky
-    this.setupPlayer(new THREE.Vector3(0, 0, -21.5), 0);
+    // coming back through the magic door from Pinky Land: step out in front of the Wishing Tree
+    if (this.arriveAt?.portal) this.setupPlayer(new THREE.Vector3(0, 0, pz - 4), Math.PI);
+    else this.setupPlayer(new THREE.Vector3(0, 0, -21.5), 0);
     this.buildPeople();
     this.buildQuests();
   }
@@ -863,9 +865,12 @@ export class EarthLevel extends Level {
     g.saveGame();
   }
 
+  // once you've been to Pinky Land, the magic door stays open both ways for good
+  doorOpen() { return this.E.hearts.length >= 5 || !!this.game.state.pinky?.arrived; }
+
   async portalAction() {
     const g = this.game;
-    if (this.E.hearts.length >= 5) {
+    if (this.doorOpen()) {
       g.goToPinkyLand();
       return;
     }
@@ -879,7 +884,7 @@ export class EarthLevel extends Level {
     const E = this.E;
     const has = (id) => E.hearts.includes(id);
     const P = (o) => o.root.position.clone();
-    if (E.hearts.length >= 5) return { text: 'All five hearts are glowing! Walk through the magic door at the Wishing Tree!', target: this.portal.group.position.clone() };
+    if (this.doorOpen() && !this.game.state.pinky?.arrived) return { text: 'All five hearts are glowing! Walk through the magic door at the Wishing Tree!', target: this.portal.group.position.clone() };
     if (this.mangoState === 'carried') return { text: 'Mango lives in the purple house. Let’s carry him to Mrs. Rosa!', target: P(this.rosa) };
     if (this.kittenState === 'carried') return { text: 'Listen for a grown-up cat calling “Mrrow?” — Peaches’s mama is in the yard of the blue house at the end of the street.', target: this.mamaCat.pos.clone() };
     if (E.bandage) return { text: 'We have the bandage! Let’s bring it to Maya.', target: P(this.maya) };

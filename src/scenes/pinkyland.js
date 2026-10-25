@@ -327,6 +327,19 @@ export class PinkyLandLevel extends Level {
       this.scene.add(st);
     }
     this.landmarks.push({ x: ARRIVE.x, z: ARRIVE.z, icon: '🌀', label: 'Dream Door', always: true });
+    // the Dream Door works both ways: step into the stone circle to go back to Earth
+    this.addInteractable({
+      pos: new THREE.Vector3(ARRIVE.x, arrH, ARRIVE.z), radius: 2.6,
+      label: 'Go back to Earth through the Dream Door 🌀', enabled: () => !this.cutscene && this.P.arrived,
+      action: async () => {
+        const c = await this.game.ui.dialogue([line(PINKY, 'Want to go back to Earth? Don’t worry — Pinky Land will be right here, just the way we left it!', { choices: [
+          { text: 'Go home to Jacinta’s house 🏠', value: 'home' },
+          { text: 'Go to the park, by the Wishing Tree 🌳', value: 'park' },
+          { text: 'Stay in Pinky Land', value: 'stay' },
+        ] })]);
+        if (c === 'home' || c === 'park') this.game.returnFromPinkyLand(c);
+      },
+    });
     const welcome = createSign('Welcome to\nPinky Land!', { color: '#ffe3ee' });
     welcome.position.set(ARRIVE.x + 5.5, this.terrain.getHeight(ARRIVE.x + 5.5, ARRIVE.z + 3), ARRIVE.z + 3);
     welcome.rotation.y = -0.6;
@@ -372,6 +385,7 @@ export class PinkyLandLevel extends Level {
     // ---- player
     let spawn = this.P.arrived && g.state.lastPos ? g.state.lastPos : { x: ARRIVE.x, z: ARRIVE.z };
     if (this.arriveAt?.ferry) spawn = this.dockSpawn;
+    if (this.arriveAt?.door) spawn = { x: ARRIVE.x + 1.5, z: ARRIVE.z + 1.5 }; // came through the Dream Door from Earth
     this.setupPlayer(new THREE.Vector3(spawn.x, 0, spawn.z), Math.PI * 0.9);
     if (this.P.cape) this.player.setCape(true);
   }
