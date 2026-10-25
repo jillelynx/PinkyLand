@@ -849,7 +849,7 @@ export class PinkyLandLevel extends Level {
       this.grandpaTop.clone().add(V(0, 6.5, 0)), // above Big Pinky
       V(CAMP.x - 1.5, T(CAMP.x - 1.5, CAMP.z - 8) + 0.1, CAMP.z - 8), // behind the camp
       V(0, T(0, R - 12) + 0.1, R - 12), // on the south beach
-      V(10, T(10, R + 16) + 0.2, R + 16), // in the coral reef
+      V(3, T(3, R + 1) + 0.7, R + 1), // in the coral reef, floating over a coral mound (well inside the island’s edge so you can reach it)
       this.pillarTop.clone(), // on the stone pillar
       V(58, 0, -40), // far east hills (set below)
     ];
